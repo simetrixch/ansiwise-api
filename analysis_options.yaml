@@ -1,0 +1,4 @@
+# The rule set this framework holds ITSELF to is the same file it ships to every plugin, at
+# lib/analysis_options.yaml. A plugin includes it as `package:ansiwise_api/analysis_options.yaml`
+# and is then held to what the framework is held to, without a second copy that can drift.
+include: lib/analysis_options.yaml

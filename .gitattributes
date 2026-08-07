@@ -1,0 +1,27 @@
+# digitacloud runs on Linux (Ubuntu hosts) but is also edited on Windows.
+# Enforce LF so shell scripts never reach the host with CRLF, which breaks
+# the shebang with `bad interpreter: /usr/bin/env bash^M`.
+
+# Normalize all text to LF in the repo AND on checkout, on every platform.
+* text=auto eol=lf
+
+# Files that MUST be LF on the Linux host.
+*.sh      text eol=lf
+*.bash    text eol=lf
+*.yaml    text eol=lf
+*.yml     text eol=lf
+*.tpl     text eol=lf
+*.json    text eol=lf
+*.md      text eol=lf
+*.conf    text eol=lf
+*.config  text eol=lf
+*.example text eol=lf
+
+# Binary artifacts — never touch line endings (helm chart packages, images).
+*.tgz   binary
+*.gz    binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary

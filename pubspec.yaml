@@ -1,0 +1,26 @@
+# Runs a declared program of steps against a machine — three modes, a record, undo, and plugins.
+#
+# It knows nothing about what is being deployed. No Kubernetes, no cloud, no product: a plugin
+# brings all of that, and a check turns the tree red if any of it appears here.
+name: ansiwise_api
+description: A typed step engine with three modes, a run record, and a registry of steps.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  # Program files are YAML. Data only — the loader rejects anything that would let YAML compute.
+  yaml: ^3.1.3
+  path: ^1.9.1
+  args: ^2.7.0
+  meta: ^1.19.0
+  collection: ^1.19.1
+  # The gate's fingerprint is a digest of the resolved input, so a dry run and the real run that
+  # follows it can be compared without storing the input itself.
+  crypto: ^3.0.7
+
+dev_dependencies:
+  test: ^1.31.2
+  lints: ^6.1.0

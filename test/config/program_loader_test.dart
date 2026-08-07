@@ -1,0 +1,525 @@
+import 'package:ansiwise_api/ansiwise_api.dart';
+import 'package:test/test.dart';
+
+/// A program file is data, and everything that is not data is refused by name and with its line.
+///
+/// The loader reads keys and values and nothing else. What it cannot recognise it refuses, and it
+/// refuses all of it at once — an operator fixing a file one problem per run is an operator running
+/// it five times to learn five things.
+void main() {
+  Matcher refusesWith(Object matcher) =>
+      throwsA(isA<ProgramInvalid>().having((ProgramInvalid e) => e.message, 'message', matcher));
+
+  group('a program that adds up', () {
+    const String source = '''
+name: deploy-cluster
+roles: [master, slave]
+steps:
+  - step: write_config_file
+    channel: "1.34/stable"
+    on_failure: die
+  - step: enable_addons
+    addons: [dns, hostpath-storage, ingress]
+    retries: 3
+    on_failure: die
+  - step: configure_public_source_routing
+    when: [has_two_nics]
+    on_failure: warn
+''';
+
+    test('reads the name, the roles and every entry in order', () {
+      final Program program = loadProgram(source, where: 'deploy-cluster.yaml');
+
+      expect(program.name.value, 'deploy-cluster');
+      expect(program.roles.map((Role r) => r.value), <String>['master', 'slave']);
+      expect(program.steps.map((ProgramStep s) => s.step.value), <String>[
+        'write_config_file',
+        'enable_addons',
+        'configure_public_source_routing',
+      ]);
+      expect(program.appliesTo(const Role('slave')), isTrue);
+    });
+
+    test('reads the failure policy of every entry, and there is no default to fall back on', () {
+      final Program program = loadProgram(source, where: 'deploy-cluster.yaml');
+
+      expect(program.steps.map((ProgramStep s) => s.onFailure), <OnFailure>[
+        OnFailure.die,
+        OnFailure.die,
+        OnFailure.warn,
+      ]);
+    });
+
+    test('reads the conditions behind when, and leaves an entry without one empty', () {
+      final Program program = loadProgram(source, where: 'deploy-cluster.yaml');
+
+      expect(program.steps.first.when, isEmpty);
+      expect(program.steps.last.when.single.value, 'has_two_nics');
+    });
+
+    test('gives every other key to the step, typed as YAML gave it', () {
+      final Program program = loadProgram(source, where: 'deploy-cluster.yaml');
+
+      expect(program.steps[0].arguments.text('channel'), '1.34/stable');
+      expect(program.steps[1].arguments.integer('retries'), 3);
+      expect(program.steps[1].arguments.textList('addons'), <String>[
+        'dns',
+        'hostpath-storage',
+        'ingress',
+      ]);
+      expect(
+        program.steps[1].arguments.raw('addons'),
+        isA<List<String>>(),
+        reason: 'a list argument has to satisfy ArgumentSpec.accepts for textList',
+      );
+    });
+
+    test('a true or false argument stays true or false', () {
+      final Program program = loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    classic: true
+    on_failure: die
+''', where: 'p.yaml');
+
+      expect(program.steps.single.arguments.flag('classic'), isTrue);
+    });
+  });
+
+  group('the file itself', () {
+    test('YAML that does not parse is refused rather than thrown raw', () {
+      expect(
+        () => loadProgram('name: [a, b\n', where: 'broken.yaml'),
+        refusesWith(contains('expected')),
+      );
+    });
+
+    test('the refusal of unparseable YAML carries its line', () {
+      expect(
+        () => loadProgram('name: [a, b\n', where: 'broken.yaml'),
+        refusesWith(contains('line ')),
+      );
+    });
+
+    test('a duplicate key is refused', () {
+      expect(
+        () => loadProgram('name: a\nname: b\nroles: [master]\nsteps: []\n', where: 'p.yaml'),
+        refusesWith(contains('Duplicate mapping key')),
+      );
+    });
+
+    test('an empty file is refused', () {
+      expect(() => loadProgram('', where: 'p.yaml'), refusesWith(contains('a program is a map')));
+    });
+
+    test('a file that is not a map is refused', () {
+      expect(
+        () => loadProgram('- one\n- two\n', where: 'p.yaml'),
+        refusesWith(contains('a program is a map')),
+      );
+    });
+
+    test('the file it came from is what the refusal is reported against', () {
+      try {
+        loadProgram('', where: 'deploy-cluster.yaml');
+        fail('the file must be refused');
+      } on ProgramInvalid catch (refused) {
+        expect(refused.where, 'deploy-cluster.yaml');
+        expect(refused.toString(), startsWith('deploy-cluster.yaml: '));
+      }
+    });
+
+    test('a key nobody declared is refused rather than ignored', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+stpes:
+  - step: write_config_file
+    on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('a program does not have a key "stpes"')),
+      );
+    });
+  });
+
+  group('anchors and aliases', () {
+    test('an alias is refused, because it lets one part of the file stand for another', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: &roles [master]
+steps:
+  - step: write_config_file
+    hosts: *roles
+    on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('an anchor or alias')),
+      );
+    });
+
+    test('an anchor nobody refers to is refused too', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    channel: &channel "1.34/stable"
+    on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('line 5: an anchor or alias')),
+      );
+    });
+
+    test('a merge key is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+defaults: &defaults
+  on_failure: die
+steps:
+  - step: write_config_file
+    <<: *defaults
+''', where: 'p.yaml'),
+        refusesWith(contains('an anchor or alias')),
+      );
+    });
+  });
+
+  group('name', () {
+    test('a missing name is refused', () {
+      expect(
+        () => loadProgram('roles: [master]\nsteps: []\n', where: 'p.yaml'),
+        refusesWith(contains('the file has no "name"')),
+      );
+    });
+
+    test('a name that is not text is refused, and the refusal says what was given', () {
+      expect(
+        () => loadProgram('name: 7\nroles: [master]\nsteps: []\n', where: 'p.yaml'),
+        refusesWith(contains('"name" is text, and the file gives a whole number')),
+      );
+    });
+
+    test('a name of the wrong shape is refused', () {
+      expect(
+        () => loadProgram('name: Deploy_Cluster\nroles: [master]\nsteps: []\n', where: 'p.yaml'),
+        refusesWith(contains('"Deploy_Cluster" is not a program name')),
+      );
+    });
+  });
+
+  group('roles', () {
+    test('missing roles are refused', () {
+      expect(
+        () => loadProgram('name: p\nsteps: []\n', where: 'p.yaml'),
+        refusesWith(contains('the file has no "roles"')),
+      );
+    });
+
+    test('roles that are not a list are refused', () {
+      expect(
+        () => loadProgram('name: p\nroles: master\nsteps: []\n', where: 'p.yaml'),
+        refusesWith(contains('"roles" is a list of role names, and the file gives text')),
+      );
+    });
+
+    test('an empty roles list is refused, because no machine would match it', () {
+      expect(
+        () => loadProgram('name: p\nroles: []\nsteps: []\n', where: 'p.yaml'),
+        refusesWith(contains('"roles" is empty')),
+      );
+    });
+
+    test('a role that is not text is refused', () {
+      expect(
+        () => loadProgram('name: p\nroles: [master, 7]\nsteps: []\n', where: 'p.yaml'),
+        refusesWith(contains('"roles" holds role names, and the file gives a whole number')),
+      );
+    });
+  });
+
+  group('steps', () {
+    test('missing steps are refused', () {
+      expect(
+        () => loadProgram('name: p\nroles: [master]\n', where: 'p.yaml'),
+        refusesWith(contains('the file has no "steps"')),
+      );
+    });
+
+    test('a program with no steps is refused', () {
+      expect(
+        () => loadProgram('name: p\nroles: [master]\nsteps: []\n', where: 'p.yaml'),
+        refusesWith(contains('"steps" is empty, and a program with no steps does nothing')),
+      );
+    });
+
+    test('steps that are not a list are refused', () {
+      expect(
+        () => loadProgram('name: p\nroles: [master]\nsteps: go\n', where: 'p.yaml'),
+        refusesWith(contains('"steps" is a list of entries, and the file gives text')),
+      );
+    });
+
+    test('an entry that is not a map is refused, by its position', () {
+      expect(
+        () => loadProgram(
+          'name: p\nroles: [master]\nsteps:\n  - write_config_file\n',
+          where: 'p.yaml',
+        ),
+        refusesWith(contains('steps[0] is not a map')),
+      );
+    });
+
+    test('an entry with no step key is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('steps[0] has no "step"')),
+      );
+    });
+
+    test('a step name of the wrong shape is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: Copy-Files
+    on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('"Copy-Files" is not a step name')),
+      );
+    });
+
+    test('a step name that is not text is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: [a]
+    on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('"step" is text, and the file gives a list')),
+      );
+    });
+  });
+
+  group('on_failure', () {
+    test('a missing failure policy is refused — there is no default', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+''', where: 'p.yaml'),
+        refusesWith(
+          contains('steps[0] write_config_file has no "on_failure" — say die, issue or warn'),
+        ),
+      );
+    });
+
+    test('a failure policy outside the three is refused, and the refusal lists them', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    on_failure: abort
+''', where: 'p.yaml'),
+        refusesWith(contains('"on_failure" is "abort", and it is one of die, issue or warn')),
+      );
+    });
+
+    test('a failure policy that is not text is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    on_failure: true
+''', where: 'p.yaml'),
+        refusesWith(
+          contains('"on_failure" is one of die, issue or warn, and the file gives true or false'),
+        ),
+      );
+    });
+  });
+
+  group('when', () {
+    test('a when that is not a list is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    when: has_two_nics
+    on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('"when" is a list of predicate names, and the file gives text')),
+      );
+    });
+
+    test('a when holding something that is not text is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    when: [7]
+    on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('"when" holds predicate names, and the file gives a whole number')),
+      );
+    });
+
+    test('a predicate name of the wrong shape is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    when: [HasTwoNics]
+    on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('"HasTwoNics" is not a predicate name')),
+      );
+    });
+  });
+
+  group('arguments', () {
+    test('an argument with no value is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    channel:
+    on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('"channel" has no value')),
+      );
+    });
+
+    test('an argument holding a map is refused, because no argument kind holds one', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    channel:
+      track: "1.34"
+    on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('"channel" is a map, and no argument holds a map')),
+      );
+    });
+
+    test('a list argument holding something that is not text is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: enable_addons
+    addons: [dns, 7]
+    on_failure: die
+''', where: 'p.yaml'),
+        refusesWith(contains('the list "addons" holds text, and one entry is a whole number')),
+      );
+    });
+  });
+
+  group('reporting', () {
+    test('every problem is reported at once, not one run at a time', () {
+      try {
+        loadProgram('''
+name: Deploy_Cluster
+roles: []
+steps:
+  - step: Install
+    on_failure: abort
+''', where: 'p.yaml');
+        fail('the file must be refused');
+      } on ProgramInvalid catch (refused) {
+        expect(refused.message, contains('is not a program name'));
+        expect(refused.message, contains('"roles" is empty'));
+        expect(refused.message, contains('is not a step name'));
+        expect(refused.message, contains('is one of die, issue or warn'));
+        expect(refused.message.split('\n'), hasLength(4));
+      }
+    });
+
+    test('the problems read down the file, and not in the order they were found', () {
+      try {
+        loadProgram('''
+name: Deploy_Cluster
+roles: []
+steps:
+  - step: write_config_file
+    channel: &channel "1.34/stable"
+    on_failure: die
+''', where: 'p.yaml');
+        fail('the file must be refused');
+      } on ProgramInvalid catch (refused) {
+        expect(refused.message.split('\n').map((String line) => line.split(':').first), <String>[
+          'line 1',
+          'line 2',
+          'line 5',
+        ]);
+      }
+    });
+
+    test('every problem carries the line it is on', () {
+      try {
+        loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: Install
+    on_failure: abort
+''', where: 'p.yaml');
+        fail('the file must be refused');
+      } on ProgramInvalid catch (refused) {
+        expect(refused.message, contains('line 4: '));
+        expect(refused.message, contains('line 5: '));
+      }
+    });
+
+    test('a bad entry does not stop the ones after it from being read', () {
+      try {
+        loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    on_failure: abort
+  - step: enable_addons
+    when: [HasTwoNics]
+    on_failure: die
+''', where: 'p.yaml');
+        fail('the file must be refused');
+      } on ProgramInvalid catch (refused) {
+        expect(refused.message, contains('"on_failure" is "abort"'));
+        expect(refused.message, contains('"HasTwoNics" is not a predicate name'));
+      }
+    });
+  });
+}
