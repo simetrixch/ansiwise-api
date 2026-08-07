@@ -65,11 +65,20 @@ final class MemoryRunStore implements RunStore {
 /// A launcher that records what it was asked for instead of starting anything.
 final class RecordingLauncher implements RunLauncher {
   final List<(ProgramName, Mode)> started = <(ProgramName, Mode)>[];
+
+  /// What each start was told, in the same order — so a test asserts that the VALUES reached the
+  /// launcher and not only that a bad set was refused before it.
+  final List<Map<String, Object?>> answers = <Map<String, Object?>>[];
   int next = 1;
 
   @override
-  Future<RunId> start({required ProgramName program, required Mode mode}) async {
+  Future<RunId> start({
+    required ProgramName program,
+    required Mode mode,
+    Map<String, Object?> answers = const <String, Object?>{},
+  }) async {
     started.add((program, mode));
+    this.answers.add(answers);
     return RunId('run-${next++}');
   }
 }

@@ -15,5 +15,13 @@ abstract interface class RunLauncher {
   ///
   /// Returns once the run is going, not once it is finished. A failure to START is thrown; a failure
   /// of the run itself is in the record, because by then there is nobody left waiting for it.
-  Future<RunId> start({required ProgramName program, required Mode mode});
+  /// [answers] is what the operator supplied, exactly as it arrived and not yet checked. The
+  /// caller refuses a bad set before ever reaching here, and the run itself checks it again
+  /// against the program's own declaration — the process that will act on a value is the one
+  /// that has to be sure of it.
+  Future<RunId> start({
+    required ProgramName program,
+    required Mode mode,
+    Map<String, Object?> answers = const <String, Object?>{},
+  });
 }

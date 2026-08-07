@@ -108,11 +108,10 @@ final class RunsEndpoint {
     if (supplied != null && supplied is! Map<String, Object?>) {
       return const Refused.badRequest('"answers" must be a JSON object');
     }
+    final Map<String, Object?> answers =
+        (supplied as Map<String, Object?>?) ?? const <String, Object?>{};
     try {
-      program.declared.answers.validate(
-        (supplied as Map<String, Object?>?) ?? const <String, Object?>{},
-        program: programName,
-      );
+      program.declared.answers.validate(answers, program: programName);
     } on AnswersRejected catch (refused) {
       return Refused.badRequest(refused.message);
     }
@@ -124,7 +123,15 @@ final class RunsEndpoint {
         program: program.declared.name,
         fingerprint: fingerprint,
       );
-      final RunId id = await launcher.start(program: program.declared.name, mode: mode);
+      // What the operator supplied travels ON, not the validated copy: the run checks it again
+      // against the program's own declaration, and the process that will ACT on a value is the
+      // one that has to be sure of it. The check above is what stops a run that cannot succeed
+      // from being started at all.
+      final RunId id = await launcher.start(
+        program: program.declared.name,
+        mode: mode,
+        answers: answers,
+      );
       return Answered(<String, Object?>{
         'run': id.value,
         'program': program.declared.name.value,

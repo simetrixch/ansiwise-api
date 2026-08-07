@@ -50,6 +50,22 @@ void main() {
         ], answers: declared),
       );
 
+  ResolvedProgram nothingNeeded() =>
+      ProgramResolver(
+        registryOf(
+          steps: <String, (String, Step Function(Arguments))>{
+            'runs_a_command': (
+              'lib/src/steps/runs_a_command.dart:9',
+              (Arguments a) => RunsACommand(argv: const <String>['true'], leaves: '/m'),
+            ),
+          },
+        ),
+      ).resolve(
+        programOf('needs-nothing', <(String, OnFailure, List<String>)>[
+          ('runs_a_command', OnFailure.die, <String>[]),
+        ]),
+      );
+
   DeploymentApi apiOver(FileRunStore store, RunDirectory directory) {
     final FixedCatalogue catalogue = FixedCatalogue(<ResolvedProgram>[program()]);
     return DeploymentApi(
@@ -202,6 +218,93 @@ void main() {
       final Refused refused = response as Refused;
       expect(refused.status, 400);
       expect(refused.reason, contains('must be a JSON object'));
+    });
+
+    test('what the operator supplied REACHES the launcher', () async {
+      // The half that was missing, and the half an operator uses. The refusal path was tested and
+      // the success path was not, which is why a run started over the API reached its steps with an
+      // empty bag while the same program on the command line worked.
+      final RecordingLauncher launcher = RecordingLauncher();
+      final FixedCatalogue catalogue = FixedCatalogue(<ResolvedProgram>[program()]);
+      const FileRunStore store = FileRunStore(directory: RunDirectory('/nowhere'));
+      final DeploymentApi api = DeploymentApi(
+        programs: ProgramsEndpoint(catalogue),
+        runs: RunsEndpoint(
+          store: store,
+          launcher: launcher,
+          catalogue: catalogue,
+          gate: const Gate(store),
+          json: const PlainRecordJson(),
+          commit: 'abc1234',
+        ),
+        events: const EventsEndpoint(store: store, json: PlainRecordJson()),
+      );
+
+      final ApiResponse response = await post(api, <String, Object?>{
+        'fqdn': 'm1.example.com',
+        'repo_pat': 'a-credential',
+      });
+
+      expect(response, isA<Answered>());
+      expect(launcher.answers.single, <String, Object?>{
+        'fqdn': 'm1.example.com',
+        'repo_pat': 'a-credential',
+      });
+    });
+
+    test('the raw set travels, not a copy with the defaults already filled in', () async {
+      // The run checks the values again against the program's own declaration, and the process that
+      // will ACT on a value is the one that has to be sure of it. Sending a pre-cooked bag would
+      // make this endpoint the authority on what a default is, in a second place.
+      final RecordingLauncher launcher = RecordingLauncher();
+      final FixedCatalogue catalogue = FixedCatalogue(<ResolvedProgram>[program()]);
+      const FileRunStore store = FileRunStore(directory: RunDirectory('/nowhere'));
+      final DeploymentApi api = DeploymentApi(
+        programs: ProgramsEndpoint(catalogue),
+        runs: RunsEndpoint(
+          store: store,
+          launcher: launcher,
+          catalogue: catalogue,
+          gate: const Gate(store),
+          json: const PlainRecordJson(),
+          commit: 'abc1234',
+        ),
+        events: const EventsEndpoint(store: store, json: PlainRecordJson()),
+      );
+
+      await post(api, <String, Object?>{'fqdn': 'm1.example.com', 'repo_pat': 'a-credential'});
+
+      // `workers` has a default of 3 and was not supplied. It must NOT be in what travels.
+      expect(launcher.answers.single.containsKey('workers'), isFalse);
+    });
+
+    test('a program that needs nothing starts with an empty set rather than none at all', () async {
+      final RecordingLauncher launcher = RecordingLauncher();
+      final FixedCatalogue catalogue = FixedCatalogue(<ResolvedProgram>[nothingNeeded()]);
+      const FileRunStore store = FileRunStore(directory: RunDirectory('/nowhere'));
+      final DeploymentApi api = DeploymentApi(
+        programs: ProgramsEndpoint(catalogue),
+        runs: RunsEndpoint(
+          store: store,
+          launcher: launcher,
+          catalogue: catalogue,
+          gate: const Gate(store),
+          json: const PlainRecordJson(),
+          commit: 'abc1234',
+        ),
+        events: const EventsEndpoint(store: store, json: PlainRecordJson()),
+      );
+
+      final ApiResponse response = await api.call(
+        ApiRequest(
+          'POST',
+          Uri.parse('/runs'),
+          body: jsonEncode(<String, Object?>{'program': 'needs-nothing', 'mode': 'test'}),
+        ),
+      );
+
+      expect(response, isA<Answered>());
+      expect(launcher.answers.single, isEmpty);
     });
   });
 }
