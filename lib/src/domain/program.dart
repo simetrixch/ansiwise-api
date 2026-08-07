@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 
 import '../model/names.dart';
 import '../model/on_failure.dart';
+import 'answers.dart';
 import 'arguments.dart';
 
 /// An ordered list of steps, and what each of them is allowed to cost.
@@ -14,7 +15,12 @@ import 'arguments.dart';
 @immutable
 final class Program {
   /// Creates a program.
-  const Program({required this.name, required this.roles, required this.steps});
+  const Program({
+    required this.name,
+    required this.roles,
+    required this.steps,
+    this.answers = DeclaredAnswers.none,
+  });
 
   /// Its name, which is also the sub-command that runs it.
   final ProgramName name;
@@ -27,6 +33,12 @@ final class Program {
 
   /// The steps, in the order they run.
   final List<ProgramStep> steps;
+
+  /// What an operator has to supply before this can run.
+  ///
+  /// Declared here rather than known by whatever starts the run, which is what lets one client
+  /// stand in front of any plugin: it renders a form from this and hard-codes no field.
+  final DeclaredAnswers answers;
 
   /// Whether this program may be run against a machine of [role].
   bool appliesTo(Role role) => roles.contains(role);

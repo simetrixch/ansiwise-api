@@ -1,4 +1,4 @@
-import '../domain/arguments.dart';
+import '../domain/argument_check.dart';
 import '../domain/program.dart';
 import '../domain/registry.dart';
 import '../domain/resolved_program.dart';
@@ -39,7 +39,14 @@ final class ProgramResolver {
         continue;
       }
 
-      problems.addAll(_argumentProblems(where, entry.arguments, registered.arguments));
+      problems.addAll(
+        argumentProblems(
+          where: where,
+          given: entry.arguments,
+          declared: registered.arguments,
+          noun: 'argument',
+        ),
+      );
 
       final List<RegisteredPredicate> when = <RegisteredPredicate>[];
       for (final PredicateName name in entry.when) {
@@ -58,31 +65,5 @@ final class ProgramResolver {
       throw ProgramInvalid(problems.join('\n'), where: program.name.value);
     }
     return ResolvedProgram(declared: program, steps: resolved);
-  }
-
-  List<String> _argumentProblems(String where, Arguments given, List<ArgumentSpec> declared) {
-    final List<String> problems = <String>[];
-    final Set<String> known = declared.map((ArgumentSpec s) => s.name).toSet();
-
-    for (final ArgumentSpec spec in declared) {
-      final Object? value = given.raw(spec.name);
-      if (value == null) {
-        if (spec.required && !spec.hasDefault) {
-          problems.add('$where: needs the argument "${spec.name}" — ${spec.describes}');
-        }
-        continue;
-      }
-      if (!spec.accepts(value)) {
-        problems.add(
-          '$where: "${spec.name}" holds ${spec.kind.name}, and the program gave ${value.runtimeType}',
-        );
-      }
-    }
-    for (final String name in given.names) {
-      if (!known.contains(name)) {
-        problems.add('$where: does not have an argument "$name"');
-      }
-    }
-    return problems;
   }
 }

@@ -15,6 +15,8 @@ export 'src/api/record_json.dart';
 export 'src/config/loaded_catalogue.dart';
 export 'src/config/plugin_configuration.dart';
 export 'src/config/program_loader.dart';
+export 'src/domain/answers.dart';
+export 'src/domain/argument_check.dart';
 export 'src/domain/arguments.dart';
 export 'src/domain/catalogue.dart';
 export 'src/domain/clock.dart';

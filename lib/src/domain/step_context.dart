@@ -49,6 +49,7 @@ base class PredicateContext {
 final class StepContext extends PredicateContext {
   /// Creates the context a step runs in.
   const StepContext({
+    this.answers = Arguments.none,
     required super.shell,
     required super.files,
     required super.http,
@@ -64,6 +65,13 @@ final class StepContext extends PredicateContext {
 
   /// The values the program gave this step, already validated against what it declared.
   final Arguments arguments;
+
+  /// What the operator supplied for this run, already checked against the declaration.
+  ///
+  /// A step reads an answer BY NAME rather than finding it substituted into its arguments.
+  /// Substitution would mean a program file that computes, and a file that computes is a file
+  /// being debugged instead of the code.
+  final Arguments answers;
 
   /// What the predicates found out about this machine before the run started.
   final Facts facts;

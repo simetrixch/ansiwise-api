@@ -106,7 +106,7 @@ void main() {
         isA<ProgramInvalid>().having(
           (ProgramInvalid e) => e.message,
           'message',
-          contains('does not have an argument "colour"'),
+          contains('has no argument "colour"'),
         ),
       ),
     );
@@ -127,7 +127,7 @@ void main() {
         isA<ProgramInvalid>().having(
           (ProgramInvalid e) => e.message,
           'message',
-          contains('"path" holds text, and the program gave int'),
+          contains('"path" holds text, and was given int'),
         ),
       ),
     );

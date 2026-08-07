@@ -61,6 +61,16 @@ final class PluginRejected extends EngineFailure {
   const PluginRejected(super.message);
 }
 
+/// What an operator supplied for a program does not add up.
+///
+/// Raised before the gate and before the first step: an installation stopped halfway for a
+/// value somebody could have typed at the start is the worst of both. Carries every problem at
+/// once for the same reason the loader does.
+final class AnswersRejected extends EngineFailure {
+  /// Records that the answers were refused, because [message].
+  const AnswersRejected(super.message);
+}
+
 /// A run was asked for that the gate does not allow yet.
 ///
 /// The three modes gate each other, and the gate lives here rather than in whatever started the

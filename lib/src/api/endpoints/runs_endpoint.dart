@@ -101,6 +101,22 @@ final class RunsEndpoint {
       return Refused.badRequest('there is no mode called "$modeName"');
     }
 
+    // Checked before the gate and before the launcher: a run that cannot succeed must not be
+    // started at all, because a half-finished installation waiting on a value somebody could have
+    // typed at the start is worse than a refusal.
+    final Object? supplied = parsed['answers'];
+    if (supplied != null && supplied is! Map<String, Object?>) {
+      return const Refused.badRequest('"answers" must be a JSON object');
+    }
+    try {
+      program.declared.answers.validate(
+        (supplied as Map<String, Object?>?) ?? const <String, Object?>{},
+        program: programName,
+      );
+    } on AnswersRejected catch (refused) {
+      return Refused.badRequest(refused.message);
+    }
+
     final String fingerprint = fingerprintOf(program: program, commit: commit);
     try {
       final RunRecord? satisfiedBy = await gate.admit(

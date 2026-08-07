@@ -12,6 +12,7 @@ library;
 
 import 'package:yaml/yaml.dart';
 
+import '../domain/answers.dart';
 import '../domain/arguments.dart';
 import '../domain/program.dart';
 import '../model/failures.dart';
@@ -52,6 +53,7 @@ Program loadProgram(String yaml, {required String where}) {
   final ProgramName? name = _name(root, refusals);
   final List<Role> roles = _roles(root, refusals);
   final List<ProgramStep> steps = _steps(root, refusals);
+  final DeclaredAnswers answers = _answers(root, refusals);
 
   // [_name] returns null only where it has already recorded a refusal, so the second half of this
   // condition never produces an empty message — and past it the name is a value rather than a
@@ -59,11 +61,133 @@ Program loadProgram(String yaml, {required String where}) {
   if (refusals.any || name == null) {
     refusals.refuse(where);
   }
-  return Program(name: name, roles: roles, steps: steps);
+  return Program(name: name, roles: roles, steps: steps, answers: answers);
+}
+
+/// What an operator has to supply, as the file declares it.
+///
+/// Absent means a program that needs nothing, which is a normal thing to be — every problem found
+/// here is recorded and the reading continues, so a file with three bad declarations is told about
+/// all three.
+DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
+  final YamlNode? node = document.nodes['answers'];
+  if (node == null) {
+    return DeclaredAnswers.none;
+  }
+  if (node is! YamlList) {
+    refusals.add(node.span.start.line, '"answers" is a list of declarations');
+    return DeclaredAnswers.none;
+  }
+
+  final List<ArgumentSpec> specs = <ArgumentSpec>[];
+  final Set<String> seen = <String>{};
+  for (final YamlNode entry in node.nodes) {
+    final int line = entry.span.start.line;
+    if (entry is! YamlMap) {
+      refusals.add(line, 'an answer is a map with "name", "kind" and "describes"');
+      continue;
+    }
+    for (final MapEntry<Object?, YamlNode> pair in entry.nodes.entries) {
+      if (pair.key case YamlScalar(value: final String key)) {
+        if (!_answerKeys.contains(key)) {
+          refusals.add(_lineOf(pair.key) ?? line, 'an answer has no key "$key"');
+        }
+      }
+    }
+
+    final Object? name = entry['name'];
+    if (name is! String || name.isEmpty) {
+      refusals.add(line, 'an answer needs a "name"');
+      continue;
+    }
+    if (!seen.add(name)) {
+      // Two declarations under one name would make which one the form asks depend on order, and
+      // the second silently wins wherever a map is built from them.
+      refusals.add(line, 'the answer "$name" is declared twice');
+      continue;
+    }
+
+    final Object? kind = entry['kind'];
+    final ArgumentKind? resolved = kind is String ? _answerKinds[kind] : null;
+    if (resolved == null) {
+      refusals.add(line, '"$name" needs a "kind": ${_answerKinds.keys.join(', ')}');
+      continue;
+    }
+
+    final Object? describes = entry['describes'];
+    if (describes is! String || describes.isEmpty) {
+      // Without it the form shows a bare field name to somebody who has never seen this system,
+      // which is the whole failure this declaration exists to prevent.
+      refusals.add(line, '"$name" needs "describes" — it is what the form shows the operator');
+      continue;
+    }
+
+    final Object? isRequired = entry['required'];
+    if (isRequired != null && isRequired is! bool) {
+      refusals.add(line, '"$name": "required" is true or false');
+      continue;
+    }
+    final Object? isSecret = entry['secret'];
+    if (isSecret != null && isSecret is! bool) {
+      refusals.add(line, '"$name": "secret" is true or false');
+      continue;
+    }
+
+    final Object? fallback = entry['default'];
+    if (fallback != null && isSecret == true) {
+      // A default for a secret is a credential written into a file that ships to every
+      // installation, which is the one thing this framework must never make easy.
+      refusals.add(line, '"$name" is secret, so it cannot have a default');
+      continue;
+    }
+    final Object? unwrapped = fallback is YamlList
+        ? <String>[for (final Object? v in fallback) '$v']
+        : fallback;
+    if (unwrapped != null) {
+      final ArgumentSpec probe = ArgumentSpec(name: name, kind: resolved, describes: describes);
+      if (!probe.accepts(unwrapped)) {
+        refusals.add(
+          line,
+          '"$name" holds ${resolved.name}, and its default is ${unwrapped.runtimeType}',
+        );
+        continue;
+      }
+    }
+
+    specs.add(
+      ArgumentSpec(
+        name: name,
+        kind: resolved,
+        describes: describes,
+        required: isRequired as bool? ?? true,
+        secret: isSecret as bool? ?? false,
+        defaultValue: unwrapped,
+      ),
+    );
+  }
+  return DeclaredAnswers(specs);
 }
 
 /// The keys a program file may write at the top level.
-const Set<String> _programKeys = <String>{'name', 'roles', 'steps'};
+const Set<String> _programKeys = <String>{'name', 'roles', 'steps', 'answers'};
+
+/// The keys one answer declaration may write.
+const Set<String> _answerKeys = <String>{
+  'name',
+  'kind',
+  'describes',
+  'required',
+  'secret',
+  'default',
+};
+
+/// The kinds an answer may declare, as a program file writes them.
+const Map<String, ArgumentKind> _answerKinds = <String, ArgumentKind>{
+  'text': ArgumentKind.text,
+  'integer': ArgumentKind.integer,
+  'flag': ArgumentKind.flag,
+  'text_list': ArgumentKind.textList,
+};
 
 /// The keys of a step entry the loader reads. Every other key of an entry is an argument.
 const Set<String> _stepKeys = <String>{'step', 'on_failure', 'when'};

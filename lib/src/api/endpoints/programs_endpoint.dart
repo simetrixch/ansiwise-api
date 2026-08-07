@@ -38,6 +38,21 @@ final class ProgramsEndpoint {
     'name': program.declared.name.value,
     'roles': <String>[for (final Role role in program.declared.roles) role.value],
     'steps': <Object?>[for (final ResolvedStep step in program.steps) _describeStep(step)],
+    // What the client builds its form out of. A field is described here or it does not exist, which
+    // is what lets one app stand in front of any plugin.
+    'answers': <Object?>[
+      for (final ArgumentSpec spec in program.declared.answers.specs)
+        <String, Object?>{
+          'name': spec.name,
+          'kind': spec.kind.name,
+          'describes': spec.describes,
+          'required': spec.required,
+          'secret': spec.secret,
+          // A secret has no default — the loader refuses one — so this can never carry a
+          // credential out.
+          if (spec.hasDefault) 'default': spec.defaultValue,
+        },
+    ],
   };
 
   Map<String, Object?> _describeStep(ResolvedStep resolved) {

@@ -78,8 +78,10 @@ Program programOf(
   List<(String, OnFailure, List<String>)> entries, {
   List<String> roles = const <String>['master'],
   Map<String, Arguments> arguments = const <String, Arguments>{},
+  DeclaredAnswers answers = DeclaredAnswers.none,
 }) => Program(
   name: ProgramName(name),
+  answers: answers,
   roles: roles.map(Role.new).toList(growable: false),
   steps: <ProgramStep>[
     for (final (String, OnFailure, List<String>) entry in entries)

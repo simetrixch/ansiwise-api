@@ -1,0 +1,257 @@
+import 'package:ansiwise_api/ansiwise_api.dart';
+import 'package:test/test.dart';
+
+/// What a program has to be told before it runs, and what happens when it is told the wrong thing.
+///
+/// This is what makes the client agnostic: the app renders a form out of these declarations and
+/// hard-codes no field, so an input added to a program file appears in the app without a line
+/// changing there, and an app in front of a different plugin shows that plugin's questions.
+void main() {
+  Program load(String yaml) => loadProgram(yaml, where: 'test.yaml');
+
+  // A program with no steps at all is refused by the loader, and rightly: it would do nothing. The
+  // step name here is never resolved — loadProgram parses, and binding to the registry is later.
+  const String head =
+      'name: deploy-thing\nroles: [master]\nsteps:\n  - step: a_step\n    on_failure: die\n';
+
+  group('declaring them', () {
+    test('reads a declaration in the order the file wrote it', () {
+      final Program program = load(
+        '${head}answers:\n'
+        '  - name: fqdn\n'
+        '    kind: text\n'
+        '    describes: the domain name this installation is reached under\n'
+        '  - name: workers\n'
+        '    kind: integer\n'
+        '    describes: how many workers to run\n',
+      );
+
+      expect(program.answers.specs.map((ArgumentSpec s) => s.name), <String>['fqdn', 'workers']);
+      expect(program.answers.specs.first.kind, ArgumentKind.text);
+      expect(program.answers.specs.last.kind, ArgumentKind.integer);
+    });
+
+    test('a program that declares nothing needs nothing', () {
+      expect(load(head).answers.specs, isEmpty);
+    });
+
+    test('names the secret ones', () {
+      final Program program = load(
+        '${head}answers:\n'
+        '  - name: fqdn\n    kind: text\n    describes: the domain\n'
+        '  - name: repo_pat\n    kind: text\n    describes: a credential\n    secret: true\n',
+      );
+
+      expect(program.answers.secretNames, <String>['repo_pat']);
+    });
+
+    test('refuses a secret with a default', () {
+      // A default for a secret is a credential written into a file that ships to every
+      // installation, which is the one thing this must never make easy.
+      expect(
+        () => load(
+          '${head}answers:\n'
+          '  - name: repo_pat\n    kind: text\n    describes: a credential\n'
+          '    secret: true\n    default: hunter2\n',
+        ),
+        throwsA(
+          isA<ProgramInvalid>().having(
+            (ProgramInvalid p) => p.message,
+            'message',
+            contains('is secret, so it cannot have a default'),
+          ),
+        ),
+      );
+    });
+
+    test('refuses a declaration with no describes, because the form would show a bare name', () {
+      expect(
+        () => load('${head}answers:\n  - name: fqdn\n    kind: text\n'),
+        throwsA(
+          isA<ProgramInvalid>().having(
+            (ProgramInvalid p) => p.message,
+            'message',
+            contains('it is what the form shows the operator'),
+          ),
+        ),
+      );
+    });
+
+    test('refuses two declarations under one name', () {
+      expect(
+        () => load(
+          '${head}answers:\n'
+          '  - name: fqdn\n    kind: text\n    describes: one\n'
+          '  - name: fqdn\n    kind: integer\n    describes: two\n',
+        ),
+        throwsA(
+          isA<ProgramInvalid>().having(
+            (ProgramInvalid p) => p.message,
+            'message',
+            contains('declared twice'),
+          ),
+        ),
+      );
+    });
+
+    test('refuses an unknown kind, and says which kinds there are', () {
+      expect(
+        () => load(
+          '${head}answers:\n  - name: fqdn\n    kind: hostname\n    describes: the domain\n',
+        ),
+        throwsA(
+          isA<ProgramInvalid>()
+              .having((ProgramInvalid p) => p.message, 'message', contains('needs a "kind"'))
+              .having((ProgramInvalid p) => p.message, 'message', contains('text')),
+        ),
+      );
+    });
+
+    test('refuses a key nobody declared rather than ignoring it', () {
+      expect(
+        () => load(
+          '${head}answers:\n'
+          '  - name: fqdn\n    kind: text\n    describes: the domain\n    hidden: true\n',
+        ),
+        throwsA(
+          isA<ProgramInvalid>().having(
+            (ProgramInvalid p) => p.message,
+            'message',
+            contains('has no key "hidden"'),
+          ),
+        ),
+      );
+    });
+
+    test('refuses a default of the wrong kind', () {
+      expect(
+        () => load(
+          '${head}answers:\n  - name: workers\n    kind: integer\n'
+          '    describes: how many\n    default: many\n',
+        ),
+        throwsA(
+          isA<ProgramInvalid>().having(
+            (ProgramInvalid p) => p.message,
+            'message',
+            contains('holds integer'),
+          ),
+        ),
+      );
+    });
+
+    test('names every bad declaration at once', () {
+      // One refusal per run is an operator running it three times to learn three things.
+      expect(
+        () => load(
+          '${head}answers:\n'
+          '  - name: a\n    kind: nope\n    describes: one\n'
+          '  - name: b\n    kind: text\n'
+          '  - kind: text\n    describes: three\n',
+        ),
+        throwsA(
+          isA<ProgramInvalid>()
+              .having((ProgramInvalid p) => p.message, 'message', contains('"a" needs a "kind"'))
+              .having((ProgramInvalid p) => p.message, 'message', contains('"b" needs "describes"'))
+              .having(
+                (ProgramInvalid p) => p.message,
+                'message',
+                contains('an answer needs a "name"'),
+              ),
+        ),
+      );
+    });
+  });
+
+  group('answering them', () {
+    const DeclaredAnswers declared = DeclaredAnswers(<ArgumentSpec>[
+      ArgumentSpec(name: 'fqdn', kind: ArgumentKind.text, describes: 'the domain'),
+      ArgumentSpec(
+        name: 'workers',
+        kind: ArgumentKind.integer,
+        describes: 'how many',
+        required: false,
+        defaultValue: 3,
+      ),
+      ArgumentSpec(
+        name: 'repo_pat',
+        kind: ArgumentKind.text,
+        describes: 'a credential',
+        secret: true,
+      ),
+    ]);
+
+    test('takes what was supplied and fills in what was not', () {
+      final Arguments answered = declared.validate(<String, Object?>{
+        'fqdn': 'm1.example.com',
+        'repo_pat': 'a-credential',
+      }, program: 'deploy-thing');
+
+      expect(answered.text('fqdn'), 'm1.example.com');
+      expect(answered.integer('workers'), 3);
+    });
+
+    test('refuses a missing required answer, naming what it is for', () {
+      expect(
+        () =>
+            declared.validate(<String, Object?>{'fqdn': 'm1.example.com'}, program: 'deploy-thing'),
+        throwsA(
+          isA<AnswersRejected>()
+              .having((AnswersRejected r) => r.message, 'message', contains('"repo_pat"'))
+              .having((AnswersRejected r) => r.message, 'message', contains('a credential')),
+        ),
+      );
+    });
+
+    test('refuses a value of the wrong kind', () {
+      expect(
+        () => declared.validate(<String, Object?>{
+          'fqdn': 'm1.example.com',
+          'repo_pat': 'a-credential',
+          'workers': 'three',
+        }, program: 'deploy-thing'),
+        throwsA(
+          isA<AnswersRejected>().having(
+            (AnswersRejected r) => r.message,
+            'message',
+            contains('holds integer'),
+          ),
+        ),
+      );
+    });
+
+    test('refuses an answer nobody declared rather than ignoring it', () {
+      // Ignoring it turns a typo into a value that silently went missing, which is exactly the
+      // failure a declaration exists to prevent.
+      expect(
+        () => declared.validate(<String, Object?>{
+          'fqdn': 'm1.example.com',
+          'repo_pat': 'a-credential',
+          'fqnd': 'm1.example.com',
+        }, program: 'deploy-thing'),
+        throwsA(
+          isA<AnswersRejected>().having(
+            (AnswersRejected r) => r.message,
+            'message',
+            contains('has no answer "fqnd"'),
+          ),
+        ),
+      );
+    });
+
+    test('names every problem at once', () {
+      expect(
+        () => declared.validate(<String, Object?>{
+          'workers': 'three',
+          'nonsense': 1,
+        }, program: 'deploy-thing'),
+        throwsA(
+          isA<AnswersRejected>()
+              .having((AnswersRejected r) => r.message, 'message', contains('"fqdn"'))
+              .having((AnswersRejected r) => r.message, 'message', contains('"repo_pat"'))
+              .having((AnswersRejected r) => r.message, 'message', contains('holds integer'))
+              .having((AnswersRejected r) => r.message, 'message', contains('"nonsense"')),
+        ),
+      );
+    });
+  });
+}
