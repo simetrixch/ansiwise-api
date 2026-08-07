@@ -41,8 +41,11 @@ final class Unwind {
 
   /// Undoes [applied] from the newest backwards.
   ///
-  /// The list is in the order the steps ran; this walks it in reverse.
-  Future<void> undo(List<AppliedStep> applied, Facts facts) async {
+  /// The list is in the order the steps ran; this walks it in reverse. [answers] is the same bag the
+  /// run was started with, because a step that read an answer to decide what it wrote reads the same
+  /// answer to decide what to take back — an undo given an empty bag would fail on the one path
+  /// where failing is least affordable.
+  Future<void> undo(List<AppliedStep> applied, Facts facts, Arguments answers) async {
     for (final AppliedStep entry in applied.reversed) {
       final Step step = entry.step;
       final RecordingLog log = RecordingLog(
@@ -61,7 +64,7 @@ final class Unwind {
 
       log.info('taking back');
       try {
-        await step.undo(_contextFor(entry.name, entry.arguments, facts));
+        await step.undo(_contextFor(entry.name, entry.arguments, facts, answers));
         log.info('taken back');
       } on Exception catch (failure) {
         log.warn('could not be taken back: $failure');
@@ -69,16 +72,18 @@ final class Unwind {
     }
   }
 
-  StepContext _contextFor(StepName name, Arguments arguments, Facts facts) => StepContext(
-    shell: RecordingShell(machine.shell, recorder: recorder, redactor: redactor, step: name),
-    files: RecordingFiles(machine.files, recorder: recorder, step: name),
-    http: RecordingHttp(machine.http, recorder: recorder, redactor: redactor, step: name),
-    clock: machine.clock,
-    log: RecordingLog(recorder: recorder, redactor: redactor, step: name),
-    step: name,
-    arguments: arguments,
-    facts: facts,
-  );
+  StepContext _contextFor(StepName name, Arguments arguments, Facts facts, Arguments answers) =>
+      StepContext(
+        shell: RecordingShell(machine.shell, recorder: recorder, redactor: redactor, step: name),
+        files: RecordingFiles(machine.files, recorder: recorder, step: name),
+        http: RecordingHttp(machine.http, recorder: recorder, redactor: redactor, step: name),
+        clock: machine.clock,
+        log: RecordingLog(recorder: recorder, redactor: redactor, step: name),
+        step: name,
+        arguments: arguments,
+        answers: answers,
+        facts: facts,
+      );
 }
 
 /// A step whose apply ran, kept so it can be taken back.

@@ -47,10 +47,15 @@ final class StepExecution {
   final Redactor redactor;
 
   /// Runs [resolved] in [mode], given what the predicates found in [facts].
+  ///
+  /// [answers] is what the operator supplied for the whole run. It is handed to every step and read
+  /// BY NAME, never substituted into a step's arguments: substitution would mean a program file
+  /// that computes, and a file that computes is a file being debugged instead of the code.
   Future<StepOutcome> execute({
     required ResolvedStep resolved,
     required Mode mode,
     required Facts facts,
+    required Arguments answers,
     required DateTime start,
   }) async {
     final StepName name = resolved.entry.step;
@@ -78,7 +83,7 @@ final class StepExecution {
       resolved.entry.arguments,
     );
     final Step step = resolved.registered.create(arguments);
-    final StepContext context = _contextFor(name, mode, arguments, facts);
+    final StepContext context = _contextFor(name, mode, arguments, facts, answers);
 
     try {
       return await _perform(
@@ -235,7 +240,13 @@ final class StepExecution {
     return defaults.isEmpty ? given : given.withDefaults(defaults);
   }
 
-  StepContext _contextFor(StepName name, Mode mode, Arguments arguments, Facts facts) {
+  StepContext _contextFor(
+    StepName name,
+    Mode mode,
+    Arguments arguments,
+    Facts facts,
+    Arguments answers,
+  ) {
     final RecordingLog log = RecordingLog(recorder: recorder, redactor: redactor, step: name);
     final Machine recording = Machine(
       shell: RecordingShell(machine.shell, recorder: recorder, redactor: redactor, step: name),
@@ -255,6 +266,7 @@ final class StepExecution {
       log: log,
       step: name,
       arguments: arguments,
+      answers: answers,
       facts: facts,
     );
   }

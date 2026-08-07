@@ -4,10 +4,12 @@ import 'package:ansiwise_api/ansiwise_api.dart';
 final class WritesAFile extends ReversibleStep with FileStep {
   WritesAFile({required this.path, required this.content});
 
-  @override
   final String path;
 
   final String content;
+
+  @override
+  String pathFor(StepContext context) => path;
 
   @override
   int get mode => 0x1a4;

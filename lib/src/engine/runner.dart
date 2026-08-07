@@ -1,3 +1,4 @@
+import '../domain/arguments.dart';
 import '../domain/machine.dart';
 import '../domain/recorder.dart';
 import '../domain/resolved_program.dart';
@@ -41,6 +42,12 @@ final class Runner {
 
   /// Runs [program] in [mode] against the machine described by [header].
   ///
+  /// [answers] is what the operator supplied, already checked against what the program declared.
+  /// The checking happens where the values were taken in and not here, so a bad answer is refused
+  /// before there is a run to refuse — a half-finished installation waiting on a value somebody
+  /// could have typed at the start is worse than a refusal. A program that declares nothing is run
+  /// with [Arguments.none], which is what a step reading no answer sees.
+  ///
   /// Returns the completed record. Throws [RoleMismatch] when the program does not apply to this
   /// machine — before anything is measured, because measuring a machine a program will not run
   /// against is work with no reader.
@@ -48,6 +55,7 @@ final class Runner {
     required ResolvedProgram program,
     required Mode mode,
     required RunRecord header,
+    Arguments answers = Arguments.none,
   }) async {
     if (!program.declared.appliesTo(header.role)) {
       throw RoleMismatch(
@@ -64,14 +72,14 @@ final class Runner {
       );
 
       final Facts facts = await _measure(program);
-      final _Walk walk = await _walkSteps(program, mode, facts);
+      final _Walk walk = await _walkSteps(program, mode, facts, answers);
 
       if (walk.ended && walk.applied.isNotEmpty) {
         await Unwind(
           machine: machine,
           recorder: recorder,
           redactor: redactor,
-        ).undo(walk.applied, facts);
+        ).undo(walk.applied, facts, answers);
       }
 
       final int exitCode = walk.ended ? 1 : (walk.issues.isEmpty ? 0 : 2);
@@ -99,7 +107,12 @@ final class Runner {
     return PredicateEvaluation(machine: machine, recorder: recorder, log: log).evaluate(program);
   }
 
-  Future<_Walk> _walkSteps(ResolvedProgram program, Mode mode, Facts facts) async {
+  Future<_Walk> _walkSteps(
+    ResolvedProgram program,
+    Mode mode,
+    Facts facts,
+    Arguments answers,
+  ) async {
     final StepExecution execution = StepExecution(
       machine: machine,
       recorder: recorder,
@@ -114,6 +127,7 @@ final class Runner {
         resolved: step,
         mode: mode,
         facts: facts,
+        answers: answers,
         start: machine.clock.now(),
       );
       records.add(outcome.record);

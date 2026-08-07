@@ -14,7 +14,12 @@ import '../model/step_plan.dart';
 /// run and reports having changed something.
 base mixin FileStep on Step {
   /// The file this step writes.
-  String get path;
+  ///
+  /// Given the context rather than read off the step, because the name of the file is often part of
+  /// what the run was told: a stage config is `config.<stage>` and a cluster map is named for the
+  /// domain, and both of those arrive as answers rather than as arguments a program file could
+  /// write.
+  String pathFor(StepContext context);
 
   /// The permission bits it ends up with.
   ///
@@ -30,6 +35,7 @@ base mixin FileStep on Step {
 
   @override
   Future<CheckResult> check(StepContext context) async {
+    final String path = pathFor(context);
     final String wanted = await contentFor(context);
     if (!await context.files.exists(path)) {
       return const CheckResult.ready();
@@ -42,6 +48,7 @@ base mixin FileStep on Step {
 
   @override
   Future<StepPlan> plan(StepContext context) async {
+    final String path = pathFor(context);
     final String wanted = await contentFor(context);
     final String current = await context.files.exists(path) ? await context.files.read(path) : '';
     return StepPlan.diff(path, before: current, after: wanted);
@@ -49,6 +56,6 @@ base mixin FileStep on Step {
 
   @override
   Future<void> apply(StepContext context) async {
-    await context.files.write(path, await contentFor(context), mode: mode);
+    await context.files.write(pathFor(context), await contentFor(context), mode: mode);
   }
 }
