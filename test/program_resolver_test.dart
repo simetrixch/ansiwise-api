@@ -170,4 +170,52 @@ void main() {
     await h.runner.run(program: program, mode: Mode.run, header: h.header());
     expect(h.files.contents['/x'], '', reason: 'the declared default stood in');
   });
+
+  test('a step reading an answer the program does not declare is refused', () {
+    // Without this the step reaches for the answer in the middle of an installation and throws
+    // there — the class of error the argument schema exists to prevent, arriving by another door.
+    expect(
+      () => const ProgramResolver(_readsTheDomain).resolve(
+        programOf('p', <(String, OnFailure, List<String>)>[
+          ('needs_the_domain', OnFailure.die, <String>[]),
+        ]),
+      ),
+      throwsA(
+        isA<ProgramInvalid>().having(
+          (ProgramInvalid p) => p.message,
+          'message',
+          contains('reads the answer "fqdn", and this program does not declare it'),
+        ),
+      ),
+    );
+  });
+
+  test('a step reading an answer the program declares resolves', () {
+    final ResolvedProgram resolved = const ProgramResolver(_readsTheDomain).resolve(
+      programOf(
+        'p',
+        <(String, OnFailure, List<String>)>[('needs_the_domain', OnFailure.die, <String>[])],
+        answers: const DeclaredAnswers(<ArgumentSpec>[
+          ArgumentSpec(name: 'fqdn', kind: ArgumentKind.text, describes: 'the domain'),
+        ]),
+      ),
+    );
+
+    expect(resolved.steps, hasLength(1));
+  });
 }
+
+/// A registry holding one step, which reads one answer.
+const Registry _readsTheDomain = Registry(
+  steps: <StepName, RegisteredStep>{
+    StepName('needs_the_domain'): RegisteredStep(
+      name: StepName('needs_the_domain'),
+      source: 'lib/src/steps/needs_the_domain.dart:1',
+      create: _aStep,
+      answers: <String>['fqdn'],
+    ),
+  },
+  predicates: <PredicateName, RegisteredPredicate>{},
+);
+
+Step _aStep(Arguments arguments) => RunsACommand(argv: const <String>['true'], leaves: '/m');

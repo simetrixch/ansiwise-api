@@ -39,6 +39,11 @@ final class ProgramResolver {
         continue;
       }
 
+      for (final String answer in registered.answers) {
+        if (program.answers.named(answer) == null) {
+          problems.add('$where: reads the answer "$answer", and this program does not declare it');
+        }
+      }
       problems.addAll(
         argumentProblems(
           where: where,

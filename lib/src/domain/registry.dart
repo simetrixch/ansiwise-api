@@ -42,6 +42,7 @@ final class RegisteredStep {
     required this.source,
     required this.create,
     this.arguments = const <ArgumentSpec>[],
+    this.answers = const <String>[],
   });
 
   /// The name a program file writes.
@@ -60,6 +61,13 @@ final class RegisteredStep {
 
   /// What this step accepts, and what it needs.
   final List<ArgumentSpec> arguments;
+
+  /// The answers this step reads out of the run, by name.
+  ///
+  /// Declared for the same reason the arguments are: a step reaching for an answer the program
+  /// never declared would fail in the middle of an installation, and the resolver refuses that
+  /// combination before anything is looked at.
+  final List<String> answers;
 }
 
 /// One predicate, as the registry holds it.
