@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # ===========================================================================
-# ci.sh — every check of this repository, in a pinned Linux container, on this machine.
+# ci.sh — the gate of this repository, in a pinned Linux container, on this machine.
 #
 # Nothing runs in a hosted CI. This script IS the CI, and it is a standing rule of this project
-# rather than a workaround: the checks are the done-criterion for every step, so they have to run
-# where a person can read them, break into them and fix them in the same minute.
+# rather than a workaround: the gate is the done-criterion for every step, so it has to run where a
+# person can read it, break into it and fix it in the same minute.
 #
-# WHY A CONTAINER AND NOT THE BARE HOST. The code is written for Linux and runs on Linux
-# everywhere else. On a Windows host it meets Git Bash and whatever Dart happens to be
-# on PATH, which is a different environment: the same check has answered differently on the two,
-# and a host run also cannot see how a file behaves under a case-sensitive filesystem.
+# WHAT IT RUNS, per Dart package, is `dart pub get`, tools/checks/analysis.lint.sh and `dart test`.
+# Four of this repository's five checks are tests under test/checks/ and arrive with the suite; the
+# fifth is the analyzer and the formatter, which cannot be a test of the package they judge.
+#
+# WHY A CONTAINER AND NOT THE BARE HOST. What is pinned here is the Dart version, and that is now
+# the whole of the reason. On a Windows host the suite meets whatever Dart happens to be on PATH,
+# which is a different environment — the same check has answered differently on the two — and a
+# host run also cannot see how a file behaves under a case-sensitive filesystem.
 #
 #   tools/ci.sh              build if needed, then run everything
 #   tools/ci.sh --rebuild    force a fresh image
@@ -70,17 +74,12 @@ fi
 # MSYS_NO_PATHCONV is set on the call rather than exported, because the same rewriting is what
 # makes `docker build` above find its context: turned off globally, the host paths would reach
 # docker as unix paths it cannot open.
-#
-# DIGITA_CI=1 is how anything inside knows where it is. tools/run-checks.sh is the only reader
-# today: without it a host run looks the same as this one, and the two do not always answer the
-# same.
 run_in_container() {
   local flags=()
   while [ "$1" != "--" ]; do flags+=("$1"); shift; done
   shift
   MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
   docker run --rm "${flags[@]}" \
-    -e DIGITA_CI=1 \
     -v "$HOST_REPO:/host/ansiwise-api:ro" \
     -v "$PUB_CACHE_VOLUME:/root/.pub-cache" \
     -w /work "$IMAGE" "$@"
@@ -93,7 +92,7 @@ fi
 # `bash -s`, not `bash -lc`: a login shell rebuilds PATH from /etc/profile and loses the dart image's
 # own /usr/lib/dart/bin, so `dart` is then not a command.
 run_in_container -i -- bash -s <<'INNER'
-# -e is deliberately off here and only here. Every package and every check has to run even after an
+# -e is deliberately off here and only here. Every package and both steps have to run even after an
 # earlier one went red, or one failure hides the rest and the next run finds a second problem that
 # was there all along.
 set -uo pipefail
@@ -101,8 +100,8 @@ set -uo pipefail
 copy-in || { echo "ci: FAIL — could not copy the tree into the container" >&2; exit 1; }
 cd /work/ansiwise-api
 
-# The same discovery the checks use, so ci.sh and a layering check can never disagree about which
-# packages exist.
+# Which packages exist is discovered rather than listed, so a package that lands on disk without
+# anybody adding it here is still analysed and still tested.
 . tools/lib/dart-packages.sh
 
 FAILED=""
@@ -111,18 +110,8 @@ while IFS= read -r package; do
   name="${package#/work/ansiwise-api/}"
   cd "$package" || { FAILED="$FAILED $name/cd"; continue; }
 
-  # A package that depends on the Flutter SDK cannot be resolved, analyzed or tested by the bare
-  # `dart` tool: `sdk: flutter` is a source only `flutter pub get` knows how to reach. Which tool a
-  # package needs is read from its own pubspec rather than from its name, so a second Flutter
-  # package needs no change here.
-  if grep -qE '^\s+sdk:\s+flutter\s*$' pubspec.yaml; then
-    TOOL=flutter
-  else
-    TOOL=dart
-  fi
-
-  echo; echo "########## $name — $TOOL pub get ##########"
-  if ! "$TOOL" pub get; then
+  echo; echo "########## $name — dart pub get ##########"
+  if ! dart pub get; then
     # Nothing below can say anything true without a resolved package config: the analyzer reports
     # every import as unresolved and the failure reads as a tree full of defects.
     FAILED="$FAILED $name/pub-get"
@@ -130,24 +119,18 @@ while IFS= read -r package; do
     continue
   fi
 
-  echo; echo "########## $name — $TOOL analyze --fatal-infos ##########"
-  "$TOOL" analyze --fatal-infos || FAILED="$FAILED $name/analyze"
+  echo; echo "########## $name — tools/checks/analysis.lint.sh ##########"
+  bash /work/ansiwise-api/tools/checks/analysis.lint.sh || FAILED="$FAILED $name/analysis"
 
-  echo; echo "########## $name — dart format ##########"
-  dart format --output=none --set-exit-if-changed . || FAILED="$FAILED $name/format"
-
-  echo; echo "########## $name — $TOOL test ##########"
+  echo; echo "########## $name — dart test ##########"
   if [ -d test ]; then
-    "$TOOL" test || FAILED="$FAILED $name/test"
+    dart test || FAILED="$FAILED $name/test"
   else
     echo "no test/ directory in $name"
   fi
 
   cd /work/ansiwise-api || exit 1
 done < <(dart_package_dirs /work/ansiwise-api)
-
-echo; echo "########## ansiwise-api — tools/run-checks.sh ##########"
-bash tools/run-checks.sh || FAILED="$FAILED run-checks"
 
 echo; echo "########## verdict ##########"
 if [ -n "$FAILED" ]; then

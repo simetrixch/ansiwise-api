@@ -75,10 +75,10 @@ Enforced, not intended:
 
 | rule | check |
 |---|---|
-| `microk8s`, `vault`, `argocd`, `cloudflare`, `helm`, `snap` only under `lib/src/steps/` and `lib/src/infrastructure/` | `tools/checks/api-purity.lint.sh` |
-| `dart:io`, `Process`, `File`, `HttpClient`, `SSHClient` only under `lib/src/infrastructure/`, plus `test/` and `bin/` | `tools/checks/exec-confinement.lint.sh` |
-| imports point inward | `tools/checks/layering.lint.sh` |
-| `install`, `setup`, `desktop` are abolished as program, sub-command and directory names | `tools/checks/naming.lint.sh` |
+| no word of `tools/api-purity.words` appears anywhere under `lib/`, `test/`, `bin/` or `programs/` | `test/checks/api_purity_test.dart` |
+| `dart:io`, `Process`, `File`, `HttpClient`, `SSHClient` only under an `infrastructure/` directory, plus `test/` and `bin/` | `test/checks/exec_confinement_test.dart` |
+| imports point inward | `test/checks/layering_test.dart` |
+| `install`, `setup`, `desktop` are abolished as program, sub-command and directory names | `test/checks/naming_test.dart` |
 
 These are checks because a package boundary used to keep the first two and no longer does. Widening
 one is a decision, not a fix.
@@ -278,15 +278,27 @@ recent version and fifty downloads is neither.
 
 ## Running the checks
 
-`bash tools/ci.sh` builds the pinned container and runs, per package: `dart pub get`,
-`dart analyze --fatal-infos`, `dart format --output=none --set-exit-if-changed .`, `dart test`, then
-`tools/run-checks.sh`.
+**`dart test` is the gate.** Four of the five checks are tests under `test/checks/` — api-purity,
+exec-confinement, layering and naming. Each reads the tree through `test/checks/source_tree.dart`,
+which serves the repository on disk and a planted scratch tree through the same interface, so the
+scan that judges this repository is the scan its counter-probe proves can go red.
+
+The fifth is `tools/checks/analysis.lint.sh`, and it is shell because it cannot be anything else: a
+test runs inside the package it would judge, so it is compiled by the very analysis it is meant to
+fail on.
+
+`bash tools/ci.sh` is the faithful run. It builds the pinned container and runs, per package:
+`dart pub get`, `tools/checks/analysis.lint.sh`, `dart test`.
 
 **It is the only CI.** Checks run locally, in Docker or WSL. No hosted workflow is created for them —
 a standing rule of this project, not a workaround.
 
-Every check carries a counter-probe: with its own scan sabotaged to find nothing, it must still go
-red. A check that always passes is the worst kind, because it reads as coverage.
+Every check carries a counter-probe: it plants the thing it forbids and asserts that it is reported,
+and it plants the correct neighbour and asserts that it is not. A check that always passes is the
+worst kind, because it reads as coverage.
+
+Adding a check means adding a `*_test.dart` under `test/checks/`. `dart test` discovers it, and a
+check that fails to compile is a red run rather than a member the runner walked past.
 
 ## Review checklist
 
@@ -305,7 +317,7 @@ red. A check that always passes is the worst kind, because it reads as coverage.
 - [ ] Every outbound call has a timeout
 - [ ] The OpenAPI spec changed in the same commit as the endpoint
 - [ ] No secret can reach the record other than through the `Redactor`
-- [ ] `dart analyze --fatal-infos`, `dart format` and `bash tools/run-checks.sh` are all clean
+- [ ] `bash tools/ci.sh` ends with `ci: OK — every check green`
 
 ## Reference files
 

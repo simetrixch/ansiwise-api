@@ -75,7 +75,7 @@ reused, so a re-attach has no gap and no duplicate.
 ## Building it
 
 ```
-bash tools/ci.sh          # the gate: a pinned container, six checks and the full test suite
+bash tools/ci.sh          # the gate: a pinned container, the analyzer, and the whole test suite
 ```
 
 That is the only CI. Nothing hosted runs these checks.
