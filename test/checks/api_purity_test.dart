@@ -98,6 +98,27 @@ void main() {
       );
     });
 
+    test('an underscore ends the word, so a SCREAMING_SNAKE name is not a hiding place', () {
+      // The shape this closes: an environment variable, a shell-ish constant, a fixture key. `\b`
+      // would count the underscore as part of the word and pass over every one of them, so the
+      // scan's answer would rest on which separator the author happened to type.
+      for (final String word in forbidden) {
+        for (final String planted in <String>['${word}_addr', 'the_$word', '$word-addr']) {
+          expect(
+            occurrencesOfForbiddenWords(
+              SourceTree.planted(<String, String>{
+                'lib/planted.dart': "const String value = '$planted';",
+              }),
+              forbidden,
+            ),
+            hasLength(1),
+            reason:
+                "'$planted' names '$word' as plainly as the bare word does, and was not reported",
+          );
+        }
+      }
+    });
+
     test('a file deep under lib/src is reported, so no exempt path has grown back', () {
       final SourceTree planted = SourceTree.planted(<String, String>{
         'lib/src/engine/deep.dart': _everyWordIn(forbidden),
@@ -159,13 +180,19 @@ List<String> scannedFilesOf(SourceTree tree) =>
 /// Every occurrence of a word of [words] in [tree], as `<file>:<line>:<text>`.
 ///
 /// Matched case-insensitively, because the words appear as prose as often as identifiers, and
-/// word-anchored, so a longer name that merely contains one is left alone.
+/// anchored on letters and digits, so a longer name that merely contains one is left alone.
+///
+/// The anchor is written out rather than left to `\b`, and the difference is the underscore. `\b`
+/// counts it as part of a word, so a word followed by `_ADDR` would not match — and SCREAMING_SNAKE
+/// is exactly where such a name arrives, because that is the shape of an environment variable.
+/// Anything that is not a letter or a digit ends the word here, so `<word>_ADDR`, `<word>-addr` and
+/// `<word>.addr` are each an occurrence, while `<word>ish` is not.
 List<String> occurrencesOfForbiddenWords(SourceTree tree, List<String> words) {
   if (words.isEmpty) {
     return const <String>[];
   }
   final RegExp anyOfThem = RegExp(
-    '\\b(?:${words.map(RegExp.escape).join('|')})\\b',
+    '(?<![A-Za-z0-9])(?:${words.map(RegExp.escape).join('|')})(?![A-Za-z0-9])',
     caseSensitive: false,
   );
   final List<String> found = <String>[];

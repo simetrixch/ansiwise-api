@@ -77,7 +77,7 @@ void main() {
           Platform.resolvedExecutable,
           arguments: <String>[script, '--context'],
           workingDirectory: work.path,
-          environment: const <String, String>{'DIGITA_TEST': 'from the caller'},
+          environment: const <String, String>{'PASSED_THROUGH': 'from the caller'},
         ),
       );
 
@@ -263,7 +263,7 @@ void main(List<String> arguments) {
   final String first = arguments.isEmpty ? '' : arguments.first;
   switch (first) {
     case '--context':
-      stdout.write('${Directory.current.path}\u0001${Platform.environment['DIGITA_TEST']}');
+      stdout.write('${Directory.current.path}\u0001${Platform.environment['PASSED_THROUGH']}');
     case '--fail':
       stderr.writeln('something went wrong');
       exit(3);
