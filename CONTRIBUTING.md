@@ -15,9 +15,10 @@ license would need the agreement of everyone who ever contributed a line.
 ## What a contribution has to carry
 
 The gate is `tool/ci.dart`, and it has to say `ci: OK — every check green` before a pull request is
-looked at. It builds a pinned container and runs five checks and the whole test suite inside it, so
-a green run on your machine means the same thing as a green run on anyone else's. Docker and Dart
-are the only things it needs of you; there is no shell script anywhere in it.
+looked at. It refuses to run on anything but the pinned Dart SDK — `tool/gate/pins.dart` names the
+version — and then runs six checks and the whole test suite, so a green run on your machine means
+the same thing as a green run on anyone else's. Dart at the pinned version is the only thing it
+needs of you; there is no shell script anywhere in it.
 
 ```
 dart run tool/ci.dart

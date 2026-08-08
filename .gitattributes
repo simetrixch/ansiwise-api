@@ -1,7 +1,6 @@
-# This framework is edited on Windows and judged on Linux: the gate copies the tree into a pinned
-# container and runs every check there, and a program file it deploys is read on a Linux machine. A
-# file that arrives with CRLF is a different file to both of them, and the difference shows up as a
-# finding about the code rather than about the line endings.
+# This framework is edited on Windows and its product runs on Linux: a program file it deploys is
+# read on a Linux machine, and a file that arrives with CRLF is a different file there. The
+# difference shows up as a finding about the code rather than about the line endings.
 #
 # There is no rule for a shell script here, and that is deliberate rather than an omission: this
 # repository holds no shell at all — the gate, the analyzer check and everything under tool/ are

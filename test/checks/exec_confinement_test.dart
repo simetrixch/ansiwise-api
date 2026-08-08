@@ -68,8 +68,8 @@ void main() {
       'lib/src/testing/fake_machine.dart': _reach,
       'test/executions/reads_a_program.dart': _reach,
       'bin/planted.dart': _reach,
-      // The gate's own programs start docker and the Dart toolchain, which is the whole of what
-      // they are. A rule that forbade them the reach would forbid the gate.
+      // The gate's own programs start the Dart toolchain, which is the whole of what they are. A
+      // rule that forbade them the reach would forbid the gate.
       'tool/gate/planted_engine.dart': _reach,
       'lib/src/domain/only_says_it.dart': _mentionsItInAComment,
     });
@@ -130,9 +130,9 @@ const List<String> waysOut = <String>['dart:io', 'Process', 'File', 'HttpClient'
 /// `bin/` — the entry point reads the process's own arguments and sets its exit code, which is one
 /// library and can be nothing else.
 ///
-/// `tool/` — the gate's own programs. They drive docker and the Dart toolchain on a developer
-/// machine and are never carried onto a deployed one, so no run of a program passes through them
-/// and no dry-run guarantee rests on them.
+/// `tool/` — the gate's own programs. They drive the Dart toolchain on a developer machine and are
+/// never carried onto a deployed one, so no run of a program passes through them and no dry-run
+/// guarantee rests on them.
 const List<String> notTheShippedLibrary = <String>['test', 'bin', 'tool'];
 
 /// The Dart files of [tree] the rule applies to, sorted.

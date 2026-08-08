@@ -75,7 +75,7 @@ reused, so a re-attach has no gap and no duplicate.
 ## Building it
 
 ```
-dart run tool/ci.dart     # the gate: a pinned container, the analyzer, and the whole test suite
+dart run tool/ci.dart     # the gate: the pinned toolchain, the analyzer, and the whole test suite
 ```
 
 That is the only CI. Nothing hosted runs these checks.

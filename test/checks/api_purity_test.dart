@@ -16,10 +16,9 @@ import 'source_tree.dart';
 /// and a hit is a hit wherever it is.
 ///
 /// tool/ is not scanned, and that is the harness rather than a loophole. This check has to name the
-/// words it forbids in order to search for them, and the container recipe has to name the tools it
-/// installs in order to install them. Nothing under tool/ is compiled into the framework or shipped
-/// with it. It is also why the list of words is a file there rather than a constant here: a list
-/// written into this file would be an occurrence of every word on it.
+/// words it forbids in order to search for them, and nothing under tool/ is compiled into the
+/// framework or shipped with it. It is also why the list of words is a file there rather than a
+/// constant here: a list written into this file would be an occurrence of every word on it.
 void main() {
   final Directory root = repositoryRoot();
   final List<String> forbidden = forbiddenWords(root);
@@ -135,15 +134,15 @@ void main() {
 
     test('a file under tool/ is not scanned, or this check would report itself', () {
       final SourceTree planted = SourceTree.planted(<String, String>{
-        'tool/Dockerfile': _everyWordIn(forbidden),
         'tool/api-purity.words': _everyWordIn(forbidden),
+        'tool/gate/planted.dart': _everyWordIn(forbidden),
       });
       expect(
         occurrencesOfForbiddenWords(planted, forbidden),
         isEmpty,
         reason:
-            'tool/ holds the word list and the container recipe, both of which have to name what '
-            'they forbid or install; scanning it makes this check impossible to pass',
+            'tool/ holds the word list, which has to name what it forbids; scanning it makes this '
+            'check impossible to pass',
       );
     });
   });

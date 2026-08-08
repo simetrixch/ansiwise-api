@@ -2,5 +2,5 @@
 .dart_tool/
 pubspec.lock
 
-# The build output of tool/ci.dart, and anything a container copy leaves behind.
+# Build output.
 build/

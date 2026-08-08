@@ -8,7 +8,7 @@ import '../../tool/gate/fake_dart_toolchain.dart';
 import '../../tool/gate/gate_log.dart';
 import '../../tool/gate/package_gate.dart';
 
-/// The inside half of the gate, driven without a container.
+/// The check sequence of the gate, driven against a scripted toolchain.
 ///
 /// The verdict line is the one thing a person reads off a gate run, and everything below decides
 /// it. A package whose resolution failed must not be tested — there is nothing true to say about it

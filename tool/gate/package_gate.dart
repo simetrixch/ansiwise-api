@@ -1,8 +1,7 @@
 /// Every check of every Dart package in this tree, and one verdict.
 ///
-/// This is the half that runs INSIDE the pinned container. Nothing here starts a container: it is
-/// handed a toolchain and a list of packages, which is what lets a test drive the whole sequence
-/// and read the verdict without docker or `dart` being involved.
+/// Nothing here starts a tool itself: it is handed a toolchain and a list of packages, which is
+/// what lets a test drive the whole sequence and read the verdict without `dart` being involved.
 ///
 /// Each package is resolved, then the analyzer and the formatter are asked about the whole tree at
 /// once, then each suite runs. A package whose resolution failed is not tested — there is nothing

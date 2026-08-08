@@ -79,6 +79,7 @@ Enforced, not intended:
 | `dart:io`, `Process`, `File`, `HttpClient`, `SSHClient` only under an `infrastructure/` directory, plus `test/`, `bin/` and `tool/` | `test/checks/exec_confinement_test.dart` |
 | imports point inward | `test/checks/layering_test.dart` |
 | `install`, `setup`, `desktop` are abolished as program, sub-command and directory names | `test/checks/naming_test.dart` |
+| every import spells the on-disk file name byte for byte | `test/checks/case_sensitivity_test.dart` |
 
 These are checks because a package boundary used to keep the first two and no longer does. Widening
 one is a decision, not a fix.
@@ -184,7 +185,7 @@ place per type. Until that day, two shapes that must not drift are a liability r
 
 Serialisation is hand-written, by an exhaustive `switch` on each sealed family, so a new variant
 breaks the build until somebody serialises it. `freezed` and `json_serializable` would give the same
-guarantee and also `==` and `copyWith` — at the price of `build_runner` in the pinned container and
+guarantee and also `==` and `copyWith` — at the price of `build_runner` in the gate and
 generated files in the tree. Dart 3's sealed classes already give the exhaustiveness that was
 freezed's main draw, so what is left did not pay for the build step. `==` is genuinely missing and
 is the one place to reconsider.
@@ -268,8 +269,8 @@ plan — those live on the board and outlive their meaning in a file.
 
 In: `yaml`, `path`, `args`, `meta`, `collection`, `crypto`. Dev: `test`, `lints`.
 
-**Never write a version from memory.** Query pub.dev's API, the Docker Hub tag API or the GitHub
-releases API, and say in a comment where the number came from and when. A tag list is paginated and
+**Never write a version from memory.** Query pub.dev's API, the Dart archive's VERSION endpoint or
+the GitHub releases API, and say in a comment where the number came from and when. A tag list is paginated and
 unsorted, so one page is not an answer and the highest on a page is not the latest.
 
 **Judge a package by its release history, not by its reputation.** `shelf` at 1.4.2 from 2024 with
@@ -278,26 +279,27 @@ recent version and fifty downloads is neither.
 
 ## Running the checks
 
-**`dart test` is the gate.** Four of the five checks are tests under `test/checks/` — api-purity,
-exec-confinement, layering and naming. Each reads the tree through `test/checks/source_tree.dart`,
-which serves the repository on disk and a planted scratch tree through the same interface, so the
-scan that judges this repository is the scan its counter-probe proves can go red.
+**`dart test` is the gate.** Five of the six checks are tests under `test/checks/` — api-purity,
+exec-confinement, layering, naming and case-sensitivity. Each reads the tree through
+`test/checks/source_tree.dart`, which serves the repository on disk and a planted scratch tree
+through the same interface, so the scan that judges this repository is the scan its counter-probe
+proves can go red.
 
-The fifth is `dart run tool/analysis.dart`, and it is a program rather than a test because it cannot
+The sixth is `dart run tool/analysis.dart`, and it is a program rather than a test because it cannot
 be one: a test runs inside the package it would judge, so it is compiled by the very analysis it is
 meant to fail on. What it decides is `tool/gate/analysis_check.dart`, behind a `DartToolchain` port,
 and `test/checks/analysis_check_test.dart` is its counter-probe — a scripted answer for the parsing
 and the real analyzer and formatter over a planted package for the day either tool changes what it
 writes.
 
-`dart run tool/ci.dart` is the faithful run, and there is no shell anywhere in it. It builds the
-pinned container and starts itself inside it with `--inside`, which copies the tree off the
-read-only mount and then runs `dart pub get` per package, `dart run tool/analysis.dart` once over
-the tree, and `dart test` per package. `--rebuild` forces a fresh image; `--shell` hands you the
-container with the tree already in place.
+`dart run tool/ci.dart` is the faithful run, and there is no shell anywhere in it. It refuses to
+run on any Dart but the pinned one — `tool/gate/pins.dart` names the version, and
+`tool/gate/version_guard.dart` reads the SDK the gate is running on and names what it found and
+what was expected — and then runs `dart pub get` per package, `dart run tool/analysis.dart` once
+over the tree, and `dart test` per package, on this machine.
 
-**It is the only CI.** Checks run locally, in Docker or WSL. No hosted workflow is created for them —
-a standing rule of this project, not a workaround.
+**It is the only CI.** Checks run locally. No hosted workflow is created for them — a standing rule
+of this project, not a workaround.
 
 Every check carries a counter-probe: it plants the thing it forbids and asserts that it is reported,
 and it plants the correct neighbour and asserts that it is not. A check that always passes is the
@@ -306,11 +308,10 @@ worst kind, because it reads as coverage.
 Adding a check means adding a `*_test.dart` under `test/checks/`. `dart test` discovers it, and a
 check that fails to compile is a red run rather than a member the runner walked past.
 
-The gate itself is checked the same way. `test/checks/container_gate_test.dart`,
-`test/checks/package_gate_test.dart` and `test/checks/gate_tree_test.dart` drive the two halves of
-`tool/ci.dart` against a fake container engine and a fake toolchain, so the image tag, the decision
-to build, what the container is told to run, the order of the steps and the verdict line are facts
-rather than things somebody checks by watching a container start.
+The gate itself is checked the same way. `test/checks/package_gate_test.dart`,
+`test/checks/version_guard_test.dart` and `test/checks/gate_tree_test.dart` drive what
+`tool/ci.dart` composes against a scripted toolchain, so the order of the steps, the verdict line
+and the refusal of an unpinned SDK are facts rather than things somebody checks by watching a run.
 
 ## Review checklist
 

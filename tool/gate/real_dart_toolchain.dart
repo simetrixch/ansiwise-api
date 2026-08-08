@@ -10,9 +10,8 @@ import 'dart_toolchain.dart';
 /// [Platform.resolvedExecutable] rather than the word `dart` on the PATH, and that is the whole
 /// point of naming it here: the tool that judges the code is then the same one that compiled the
 /// judge, so a machine carrying two SDKs cannot analyse the tree with one and report under the name
-/// of the other. Inside the pinned container there is only ever one, which is what makes the two
-/// spellings agree there and is exactly why the difference has to be settled somewhere it is
-/// visible.
+/// of the other. It is also what makes the version guard sufficient: the guard reads this
+/// process's own version, and this is the line that makes that version the one every step runs on.
 ///
 /// Every call runs FROM inside the package rather than naming it as an argument, so the
 /// analysis_options that applies is the one that package ships. Nothing goes through a shell: a

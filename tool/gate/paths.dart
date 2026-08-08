@@ -1,10 +1,10 @@
 /// The path arithmetic the gate does for itself.
 ///
-/// `package:path` would answer all of this, and nothing under tool/ may import it. The gate's own
-/// program is started inside the container before anything has been resolved — it is what copies
-/// the tree in — and the package config it would find beside itself there is the host's, holding
-/// absolute paths into a Windows filesystem. So tool/ imports nothing but `dart:`, and the two
-/// things it needs from a path library are here.
+/// `package:path` would answer all of this, and nothing under tool/ may import it. The gate is
+/// what resolves the tree — `dart pub get` is its first step — so its own program has to start on
+/// a fresh clone where no package has been resolved, and a `package:` import would make it unable
+/// to start until it had already run. So tool/ imports nothing but `dart:`, and the two things it
+/// needs from a path library are here.
 library;
 
 import 'dart:io';

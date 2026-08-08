@@ -4,15 +4,14 @@ import 'package:test/test.dart';
 
 import '../../tool/gate/dart_packages.dart';
 import '../../tool/gate/paths.dart';
-import '../../tool/gate/tree_copy.dart';
 
-/// The two things the gate does to a tree before it judges it — find the packages in it and copy it
-/// into the container — plus the path arithmetic it does for itself.
+/// What the gate does to a tree before it judges it — find the packages in it — plus the path
+/// arithmetic it does for itself.
 ///
-/// Nothing under tool/ may import package:path, because the gate's own program starts inside the
-/// container before anything has been resolved. So the little that a path library would have
-/// answered is written there and proven here, and a wrong answer sends docker at the wrong
-/// directory or leaves the analyzer resolving packages that are not in the container.
+/// Nothing under tool/ may import package:path, because the gate is what resolves the tree: its
+/// own program has to start before anything has been resolved. So the little that a path library
+/// would have answered is written there and proven here, and a wrong answer points the toolchain
+/// at the wrong directory.
 void main() {
   group('the path arithmetic tool/ does without package:path', () {
     test('a program under tool/ finds the package it is part of', () {
@@ -31,7 +30,7 @@ void main() {
         endsWith('tool'),
         reason:
             'the arithmetic is two levels up and nothing cleverer; a gate program that moved into '
-            'a subdirectory would hand docker the wrong directory to mount',
+            'a subdirectory would hand the toolchain the wrong directory to start in',
       );
     });
 
@@ -99,62 +98,6 @@ void main() {
 
     test('a manifest that declares no name is not a package', () {
       expect(declaredPackageName('description: no name here\n'), isNull);
-    });
-  });
-
-  group('copying the tree in', () {
-    test('everything comes along, whatever it is nested in', () {
-      final Directory source = _scratch();
-      final Directory target = _scratch();
-      Directory('${source.path}/lib/src/steps').createSync(recursive: true);
-      File('${source.path}/lib/src/steps/planted.dart').writeAsStringSync('const int x = 1;');
-      File('${source.path}/pubspec.yaml').writeAsStringSync('name: planted\n');
-
-      copyTree(source, Directory('${target.path}/copy'));
-
-      expect(File('${target.path}/copy/lib/src/steps/planted.dart').existsSync(), isTrue);
-      expect(File('${target.path}/copy/pubspec.yaml').existsSync(), isTrue);
-    });
-
-    test('.dart_tool is left behind, because it holds absolute paths into the host', () {
-      final Directory source = _scratch();
-      final Directory target = _scratch();
-      Directory('${source.path}/.dart_tool').createSync(recursive: true);
-      File('${source.path}/.dart_tool/package_config.json').writeAsStringSync('{}');
-
-      copyTree(source, Directory('${target.path}/copy'));
-
-      expect(
-        Directory('${target.path}/copy/.dart_tool').existsSync(),
-        isFalse,
-        reason:
-            'a package config written on Windows points at C:\\…, so a copy of it makes the '
-            'analyzer resolve packages that are not in the container',
-      );
-    });
-
-    test('a .dart_tool nested deeper in the tree is left behind too', () {
-      final Directory source = _scratch();
-      final Directory target = _scratch();
-      Directory('${source.path}/member/.dart_tool').createSync(recursive: true);
-      File('${source.path}/member/.dart_tool/package_config.json').writeAsStringSync('{}');
-      File('${source.path}/member/pubspec.yaml').writeAsStringSync('name: planted_member\n');
-
-      copyTree(source, Directory('${target.path}/copy'));
-
-      expect(File('${target.path}/copy/member/pubspec.yaml').existsSync(), isTrue);
-      expect(Directory('${target.path}/copy/member/.dart_tool').existsSync(), isFalse);
-    });
-
-    test('a second copy over the same target answers the same as the first', () {
-      final Directory source = _scratch();
-      final Directory target = _scratch();
-      File('${source.path}/planted.txt').writeAsStringSync('first');
-      copyTree(source, Directory('${target.path}/copy'));
-      File('${source.path}/planted.txt').writeAsStringSync('second');
-      copyTree(source, Directory('${target.path}/copy'));
-
-      expect(File('${target.path}/copy/planted.txt').readAsStringSync(), 'second');
     });
   });
 }
