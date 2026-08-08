@@ -117,6 +117,31 @@ final class RunsEndpoint {
     }
 
     final String fingerprint = fingerprintOf(program: program, commit: commit);
+
+    // Refused here as well as in the run itself, and the duplication is the point: the run refuses
+    // because the process that acts has to be sure, and this refuses so that an operator gets a
+    // sentence back instead of a run that starts and dies where nobody is watching.
+    final Object? continues = parsed['resumes'];
+    RunId? resumes;
+    if (continues != null) {
+      if (continues is! String || continues.isEmpty) {
+        return const Refused.badRequest(
+          '"resumes" is the identifier of the run this one continues',
+        );
+      }
+      final RunRecord? earlier = await store.read(RunId(continues));
+      if (earlier == null) {
+        return Refused.notFound('there is no run called "$continues" to continue');
+      }
+      if (earlier.fingerprint != fingerprint) {
+        return Refused.badRequest(
+          'run "$continues" was a different input, so this would not be continuing it — start a '
+          'fresh run instead, or say why the input changed',
+        );
+      }
+      resumes = earlier.id;
+    }
+
     try {
       final RunRecord? satisfiedBy = await gate.admit(
         mode: mode,
@@ -131,12 +156,14 @@ final class RunsEndpoint {
         program: program.declared.name,
         mode: mode,
         answers: answers,
+        resumes: resumes,
       );
       return Answered(<String, Object?>{
         'run': id.value,
         'program': program.declared.name.value,
         'mode': mode.name,
         'fingerprint': fingerprint,
+        if (resumes case final RunId earlier) 'resumes': earlier.value,
         // Which dry run let this one through, so the operator can see they are acting on the one
         // they just read rather than on some older green run they have forgotten about.
         if (satisfiedBy != null) 'admitted_by': satisfiedBy.id.value,

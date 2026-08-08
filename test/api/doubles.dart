@@ -69,6 +69,11 @@ final class RecordingLauncher implements RunLauncher {
   /// What each start was told, in the same order — so a test asserts that the VALUES reached the
   /// launcher and not only that a bad set was refused before it.
   final List<Map<String, Object?>> answers = <Map<String, Object?>>[];
+
+  /// The run each start was told it continues, or null where it starts fresh. Kept for the same
+  /// reason as the answers: a refusal that never reached the launcher proves nothing about what a
+  /// run that WAS started was told.
+  final List<RunId?> resumed = <RunId?>[];
   int next = 1;
 
   @override
@@ -76,9 +81,11 @@ final class RecordingLauncher implements RunLauncher {
     required ProgramName program,
     required Mode mode,
     Map<String, Object?> answers = const <String, Object?>{},
+    RunId? resumes,
   }) async {
     started.add((program, mode));
     this.answers.add(answers);
+    resumed.add(resumes);
     return RunId('run-${next++}');
   }
 }

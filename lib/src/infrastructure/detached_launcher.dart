@@ -40,6 +40,7 @@ final class DetachedLauncher implements RunLauncher {
     required ProgramName program,
     required Mode mode,
     Map<String, Object?> answers = const <String, Object?>{},
+    RunId? resumes,
   }) async {
     final RunId id = newRunId();
     final bool hasAnswers = answers.isNotEmpty;
@@ -64,6 +65,9 @@ final class DetachedLauncher implements RunLauncher {
         mode.flag,
         '--run',
         id.value,
+        // In argv rather than over stdin, and it belongs there: a run identifier is not a secret,
+        // and it is the one thing about this run that a process listing may as well say.
+        if (resumes case final RunId earlier) ...<String>['--resume', earlier.value],
         if (hasAnswers) ...<String>['--answers', '-'],
       ],
       workingDirectory: workingDirectory,
