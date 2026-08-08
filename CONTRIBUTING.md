@@ -14,12 +14,13 @@ license would need the agreement of everyone who ever contributed a line.
 
 ## What a contribution has to carry
 
-The gate is `tools/ci.sh`, and it has to say `ci: OK — every check green` before a pull request is
-looked at. It builds a pinned container and runs six checks and the whole test suite inside it, so a
-green run on your machine means the same thing as a green run on anyone else's.
+The gate is `tool/ci.dart`, and it has to say `ci: OK — every check green` before a pull request is
+looked at. It builds a pinned container and runs five checks and the whole test suite inside it, so
+a green run on your machine means the same thing as a green run on anyone else's. Docker and Dart
+are the only things it needs of you; there is no shell script anywhere in it.
 
 ```
-bash tools/ci.sh
+dart run tool/ci.dart
 ```
 
 Two of those checks are worth knowing about before you start:
@@ -33,7 +34,8 @@ the author had in mind. Everything platform-specific belongs in a plugin.
 
 **exec-confinement** fails when anything in the shipped library outside `lib/src/infrastructure/`
 references `dart:io`, `Process`, `File` or `HttpClient`. The four ports are the only way any code
-reaches outside, and that is what makes a dry run provable rather than intended.
+reaches outside, and that is what makes a dry run provable rather than intended. `test/`, `bin/` and
+`tool/` ship nothing and stand outside the rule.
 
 ## What a step, a port or an engine change has to prove
 

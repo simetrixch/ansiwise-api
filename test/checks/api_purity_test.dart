@@ -15,11 +15,11 @@ import 'source_tree.dart';
 /// its imports. THERE IS NO EXEMPT DIRECTORY: lib/, test/, bin/ and programs/ are read to the byte,
 /// and a hit is a hit wherever it is.
 ///
-/// tools/ is not scanned, and that is the harness rather than a loophole. This check has to name
-/// the words it forbids in order to search for them, and the container has to name the tools it
-/// installs in order to install them. Nothing under tools/ is compiled into the framework or
-/// shipped with it. It is also why the list of words is a file there rather than a constant here:
-/// a list written into this file would be an occurrence of every word on it.
+/// tool/ is not scanned, and that is the harness rather than a loophole. This check has to name the
+/// words it forbids in order to search for them, and the container recipe has to name the tools it
+/// installs in order to install them. Nothing under tool/ is compiled into the framework or shipped
+/// with it. It is also why the list of words is a file there rather than a constant here: a list
+/// written into this file would be an occurrence of every word on it.
 void main() {
   final Directory root = repositoryRoot();
   final List<String> forbidden = forbiddenWords(root);
@@ -112,16 +112,16 @@ void main() {
       expect(occurrencesOfForbiddenWords(planted, forbidden), isNotEmpty);
     });
 
-    test('a file under tools/ is not scanned, or this check would report itself', () {
+    test('a file under tool/ is not scanned, or this check would report itself', () {
       final SourceTree planted = SourceTree.planted(<String, String>{
-        'tools/checks/planted.sh': _everyWordIn(forbidden),
-        'tools/api-purity.words': _everyWordIn(forbidden),
+        'tool/Dockerfile': _everyWordIn(forbidden),
+        'tool/api-purity.words': _everyWordIn(forbidden),
       });
       expect(
         occurrencesOfForbiddenWords(planted, forbidden),
         isEmpty,
         reason:
-            'tools/ holds the word list and the container recipe, both of which have to name what '
+            'tool/ holds the word list and the container recipe, both of which have to name what '
             'they forbid or install; scanning it makes this check impossible to pass',
       );
     });
@@ -135,7 +135,7 @@ void main() {
 const List<String> scannedPaths = <String>['lib', 'test', 'bin', 'programs'];
 
 /// Where the words live, relative to the repository root.
-const String wordListPath = 'tools/api-purity.words';
+const String wordListPath = 'tool/api-purity.words';
 
 /// The words the framework may not name, read from [wordListPath] under [root].
 List<String> forbiddenWords(Directory root) {

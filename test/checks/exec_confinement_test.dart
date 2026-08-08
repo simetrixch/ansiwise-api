@@ -18,13 +18,11 @@ import 'source_tree.dart';
 /// So the reach itself is confined by name. A directory called infrastructure/ is where a port is
 /// implemented against the real machine; everywhere else in the shipped library asks a port.
 ///
-/// THE RULE IS ABOUT THE SHIPPED LIBRARY, so two directories of the package layout stand outside
-/// it. A test that could not open a program file would be verifying a copy of the program pasted
-/// into it rather than the program that ships, and the entry point under bin/ reads the process's
-/// own arguments and sets its exit code, which is one library and can be nothing else. Both are
-/// matched at the package root and not as a path segment anywhere: lib/src/testing/ ships — it is
-/// the fake machine the framework hands to a step's test, and a fake that reached the real one
-/// would defeat the thing it exists for.
+/// THE RULE IS ABOUT THE SHIPPED LIBRARY, so the directories of the package layout that ship
+/// nothing stand outside it — they are named in [notTheShippedLibrary] and each is matched at the
+/// package root and not as a path segment anywhere. lib/src/testing/ is deliberately not among
+/// them: it ships — it is the fake machine the framework hands to a step's test, and a fake that
+/// reached the real one would defeat the thing it exists for.
 void main() {
   final SourceTree tree = SourceTree.on(repositoryRoot());
 
@@ -70,6 +68,9 @@ void main() {
       'lib/src/testing/fake_machine.dart': _reach,
       'test/executions/reads_a_program.dart': _reach,
       'bin/planted.dart': _reach,
+      // The gate's own programs start docker and the Dart toolchain, which is the whole of what
+      // they are. A rule that forbade them the reach would forbid the gate.
+      'tool/gate/planted_engine.dart': _reach,
       'lib/src/domain/only_says_it.dart': _mentionsItInAComment,
     });
     final List<String> reported = directReachesIn(planted);
@@ -91,12 +92,13 @@ void main() {
       'lib/src/infrastructure/real_shell.dart',
       'test/executions/reads_a_program.dart',
       'bin/planted.dart',
+      'tool/gate/planted_engine.dart',
     ]) {
       test('the same lines in $path are not reported', () {
         expect(
           reported.where((String hit) => hit.startsWith('$path:')),
           isEmpty,
-          reason: 'this scan refuses one of the three places the reach belongs',
+          reason: 'this scan refuses one of the places the reach belongs',
         );
       });
     }
@@ -119,6 +121,19 @@ void main() {
 /// step never starts a process itself" is not a reference to `Process`, and the port class `Files`
 /// is not `File`.
 const List<String> waysOut = <String>['dart:io', 'Process', 'File', 'HttpClient', 'SSHClient'];
+
+/// The directories of a package that are not its shipped library, matched at the package root.
+///
+/// `test/` — a test that could not open a program file would be verifying a copy of the program
+/// pasted into it rather than the program that ships.
+///
+/// `bin/` — the entry point reads the process's own arguments and sets its exit code, which is one
+/// library and can be nothing else.
+///
+/// `tool/` — the gate's own programs. They drive docker and the Dart toolchain on a developer
+/// machine and are never carried onto a deployed one, so no run of a program passes through them
+/// and no dry-run guarantee rests on them.
+const List<String> notTheShippedLibrary = <String>['test', 'bin', 'tool'];
 
 /// The Dart files of [tree] the rule applies to, sorted.
 List<String> confinedFilesOf(SourceTree tree) =>
@@ -144,7 +159,7 @@ List<String> directReachesIn(SourceTree tree) {
   return found;
 }
 
-/// Whether [path] is one of the three places the reach is allowed in the package holding it.
+/// Whether [path] is one of the places the reach is allowed in the package holding it.
 bool _reachIsAllowedIn(SourceTree tree, String path) {
   // An infrastructure/ directory is where the reach belongs. The test is on a path segment, so a
   // file merely NAMED infrastructure.dart is not inside one.
@@ -153,8 +168,10 @@ bool _reachIsAllowedIn(SourceTree tree, String path) {
   }
   for (final String directory in tree.packages.keys) {
     final String prefix = directory.isEmpty ? '' : '$directory/';
-    if (path.startsWith('${prefix}test/') || path.startsWith('${prefix}bin/')) {
-      return true;
+    for (final String outside in notTheShippedLibrary) {
+      if (path.startsWith('$prefix$outside/')) {
+        return true;
+      }
     }
   }
   return false;

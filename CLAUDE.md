@@ -75,8 +75,8 @@ Enforced, not intended:
 
 | rule | check |
 |---|---|
-| no word of `tools/api-purity.words` appears anywhere under `lib/`, `test/`, `bin/` or `programs/` | `test/checks/api_purity_test.dart` |
-| `dart:io`, `Process`, `File`, `HttpClient`, `SSHClient` only under an `infrastructure/` directory, plus `test/` and `bin/` | `test/checks/exec_confinement_test.dart` |
+| no word of `tool/api-purity.words` appears anywhere under `lib/`, `test/`, `bin/` or `programs/` | `test/checks/api_purity_test.dart` |
+| `dart:io`, `Process`, `File`, `HttpClient`, `SSHClient` only under an `infrastructure/` directory, plus `test/`, `bin/` and `tool/` | `test/checks/exec_confinement_test.dart` |
 | imports point inward | `test/checks/layering_test.dart` |
 | `install`, `setup`, `desktop` are abolished as program, sub-command and directory names | `test/checks/naming_test.dart` |
 
@@ -283,12 +283,18 @@ exec-confinement, layering and naming. Each reads the tree through `test/checks/
 which serves the repository on disk and a planted scratch tree through the same interface, so the
 scan that judges this repository is the scan its counter-probe proves can go red.
 
-The fifth is `tools/checks/analysis.lint.sh`, and it is shell because it cannot be anything else: a
-test runs inside the package it would judge, so it is compiled by the very analysis it is meant to
-fail on.
+The fifth is `dart run tool/analysis.dart`, and it is a program rather than a test because it cannot
+be one: a test runs inside the package it would judge, so it is compiled by the very analysis it is
+meant to fail on. What it decides is `tool/gate/analysis_check.dart`, behind a `DartToolchain` port,
+and `test/checks/analysis_check_test.dart` is its counter-probe — a scripted answer for the parsing
+and the real analyzer and formatter over a planted package for the day either tool changes what it
+writes.
 
-`bash tools/ci.sh` is the faithful run. It builds the pinned container and runs, per package:
-`dart pub get`, `tools/checks/analysis.lint.sh`, `dart test`.
+`dart run tool/ci.dart` is the faithful run, and there is no shell anywhere in it. It builds the
+pinned container and starts itself inside it with `--inside`, which copies the tree off the
+read-only mount and then runs `dart pub get` per package, `dart run tool/analysis.dart` once over
+the tree, and `dart test` per package. `--rebuild` forces a fresh image; `--shell` hands you the
+container with the tree already in place.
 
 **It is the only CI.** Checks run locally, in Docker or WSL. No hosted workflow is created for them —
 a standing rule of this project, not a workaround.
@@ -299,6 +305,12 @@ worst kind, because it reads as coverage.
 
 Adding a check means adding a `*_test.dart` under `test/checks/`. `dart test` discovers it, and a
 check that fails to compile is a red run rather than a member the runner walked past.
+
+The gate itself is checked the same way. `test/checks/container_gate_test.dart`,
+`test/checks/package_gate_test.dart` and `test/checks/gate_tree_test.dart` drive the two halves of
+`tool/ci.dart` against a fake container engine and a fake toolchain, so the image tag, the decision
+to build, what the container is told to run, the order of the steps and the verdict line are facts
+rather than things somebody checks by watching a container start.
 
 ## Review checklist
 
@@ -317,7 +329,7 @@ check that fails to compile is a red run rather than a member the runner walked 
 - [ ] Every outbound call has a timeout
 - [ ] The OpenAPI spec changed in the same commit as the endpoint
 - [ ] No secret can reach the record other than through the `Redactor`
-- [ ] `bash tools/ci.sh` ends with `ci: OK — every check green`
+- [ ] `dart run tool/ci.dart` ends with `ci: OK — every check green`
 
 ## Reference files
 

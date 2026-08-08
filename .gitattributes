@@ -1,23 +1,23 @@
-# digitacloud runs on Linux (Ubuntu hosts) but is also edited on Windows.
-# Enforce LF so shell scripts never reach the host with CRLF, which breaks
-# the shebang with `bad interpreter: /usr/bin/env bash^M`.
+# This framework is edited on Windows and judged on Linux: the gate copies the tree into a pinned
+# container and runs every check there, and a program file it deploys is read on a Linux machine. A
+# file that arrives with CRLF is a different file to both of them, and the difference shows up as a
+# finding about the code rather than about the line endings.
+#
+# There is no rule for a shell script here, and that is deliberate rather than an omission: this
+# repository holds no shell at all — the gate, the analyzer check and everything under tool/ are
+# Dart programs.
 
 # Normalize all text to LF in the repo AND on checkout, on every platform.
 * text=auto eol=lf
 
-# Files that MUST be LF on the Linux host.
-*.sh      text eol=lf
-*.bash    text eol=lf
+# Files that MUST be LF, whatever the platform they were written on.
 *.yaml    text eol=lf
 *.yml     text eol=lf
-*.tpl     text eol=lf
 *.json    text eol=lf
 *.md      text eol=lf
-*.conf    text eol=lf
-*.config  text eol=lf
-*.example text eol=lf
+*.words   text eol=lf
 
-# Binary artifacts — never touch line endings (helm chart packages, images).
+# Binary artifacts — never touch line endings.
 *.tgz   binary
 *.gz    binary
 *.png   binary

@@ -116,11 +116,12 @@ void main() {
   });
 }
 
-/// What is scanned: tools/ and every Dart package.
+/// What is scanned: tool/ and every Dart package.
 ///
 /// The empty string is the whole tree, which is what the root package of this repository amounts
-/// to.
-List<String> rootsOf(SourceTree tree) => <String>['tools', ...tree.packages.keys];
+/// to. tool/ is named beside it for the tree where the gate's own programs sit outside every
+/// package: a name an operator reads is a name an operator reads wherever the file lives.
+List<String> rootsOf(SourceTree tree) => <String>['tool', ...tree.packages.keys];
 
 /// Every file and directory name under [root] carrying an abolished word, as `<path> — <why>`.
 ///
