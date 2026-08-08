@@ -139,6 +139,77 @@ void main() {
       );
     });
 
+    test('reads the values an answer may hold', () {
+      final Program program = load(
+        '${head}answers:\n'
+        '  - name: role\n    kind: text\n    allowed: [master, slave]\n'
+        '    describes: what this machine is\n',
+      );
+
+      expect(program.answers.specs.single.allowed, <String>['master', 'slave']);
+    });
+
+    test('an answer with no closed set permits anything of its kind', () {
+      final Program program = load(
+        '${head}answers:\n  - name: fqdn\n    kind: text\n    describes: the domain\n',
+      );
+
+      expect(program.answers.specs.single.allowed, isEmpty);
+      expect(program.answers.specs.single.permits('anything at all'), isTrue);
+    });
+
+    test('only text may name allowed values', () {
+      // A flag already has two values, and a number or a list of text has no small closed set worth
+      // writing out — so declaring one there is a mistake, refused rather than quietly ignored.
+      expect(
+        () => load(
+          '${head}answers:\n  - name: workers\n    kind: integer\n'
+          '    allowed: ["1", "2"]\n    describes: how many\n',
+        ),
+        throwsA(
+          isA<ProgramInvalid>().having(
+            (ProgramInvalid p) => p.message,
+            'message',
+            contains('only text may name allowed values'),
+          ),
+        ),
+      );
+    });
+
+    test('refuses an empty allowed list, which would permit nothing at all', () {
+      expect(
+        () => load(
+          '${head}answers:\n  - name: role\n    kind: text\n'
+          '    allowed: []\n    describes: what this machine is\n',
+        ),
+        throwsA(
+          isA<ProgramInvalid>().having(
+            (ProgramInvalid p) => p.message,
+            'message',
+            contains('non-empty list'),
+          ),
+        ),
+      );
+    });
+
+    test('refuses a default outside the set the same file declares', () {
+      // A value the file itself calls illegal, standing in wherever a program says nothing.
+      expect(
+        () => load(
+          '${head}answers:\n  - name: role\n    kind: text\n'
+          '    allowed: [master, slave]\n    default: gateway\n'
+          '    describes: what this machine is\n',
+        ),
+        throwsA(
+          isA<ProgramInvalid>().having(
+            (ProgramInvalid p) => p.message,
+            'message',
+            contains('holds one of master, slave'),
+          ),
+        ),
+      );
+    });
+
     test('names every bad declaration at once', () {
       // One refusal per run is an operator running it three times to learn three things.
       expect(
@@ -179,6 +250,59 @@ void main() {
         secret: true,
       ),
     ]);
+
+    // An answer whose legal values are a closed set, kept apart from [declared] so the tests around
+    // it keep measuring exactly what they measured before.
+    const DeclaredAnswers closed = DeclaredAnswers(<ArgumentSpec>[
+      ArgumentSpec(
+        name: 'role',
+        kind: ArgumentKind.text,
+        describes: 'what this machine is',
+        allowed: <String>['master', 'slave'],
+      ),
+    ]);
+
+    test('takes a value the declaration names', () {
+      expect(
+        closed.validate(<String, Object?>{'role': 'slave'}, program: 'deploy-thing').text('role'),
+        'slave',
+      );
+    });
+
+    test('refuses a value outside the set, and says what the set is', () {
+      // Naming the set is the difference between an operator fixing it and an operator guessing:
+      // the values live in the program file and nowhere the message would otherwise reach.
+      expect(
+        () => closed.validate(<String, Object?>{'role': 'gateway'}, program: 'deploy-thing'),
+        throwsA(
+          isA<AnswersRejected>()
+              .having(
+                (AnswersRejected r) => r.message,
+                'message',
+                contains('holds one of master, slave'),
+              )
+              .having((AnswersRejected r) => r.message, 'message', contains('"gateway"')),
+        ),
+      );
+    });
+
+    test('a wrong kind and a wrong value are two different sentences', () {
+      // Both are "that will not do", and an operator who is told the wrong one looks in the wrong
+      // place: one is a value of the right sort that this answer does not offer, the other is not
+      // even that sort of value.
+      String refusalFor(Object value) {
+        try {
+          closed.validate(<String, Object?>{'role': value}, program: 'deploy-thing');
+        } on AnswersRejected catch (rejected) {
+          return rejected.message;
+        }
+        return 'nothing was refused';
+      }
+
+      expect(refusalFor(7), contains('holds text'));
+      expect(refusalFor(7), isNot(contains('holds one of')));
+      expect(refusalFor('gateway'), contains('holds one of'));
+    });
 
     test('takes what was supplied and fills in what was not', () {
       final Arguments answered = declared.validate(<String, Object?>{

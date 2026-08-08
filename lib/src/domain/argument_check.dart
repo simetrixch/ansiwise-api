@@ -32,6 +32,14 @@ List<String> argumentProblems({
       problems.add(
         '$where: "${spec.name}" holds ${spec.kind.name}, and was given ${value.runtimeType}',
       );
+      continue;
+    }
+    // Asked only once the kind is right: "holds one of master, slave" said about an int would be
+    // true and useless.
+    if (!spec.permits(value)) {
+      problems.add(
+        '$where: "${spec.name}" holds one of ${spec.allowed.join(', ')}, and was given "$value"',
+      );
     }
   }
   for (final String name in given.names) {

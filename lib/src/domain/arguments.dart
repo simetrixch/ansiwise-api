@@ -31,6 +31,7 @@ final class ArgumentSpec {
     this.required = true,
     this.secret = false,
     this.defaultValue,
+    this.allowed = const <String>[],
   });
 
   /// The key a program file writes.
@@ -55,16 +56,44 @@ final class ArgumentSpec {
   /// What it is when a program does not give it.
   final Object? defaultValue;
 
+  /// The only values this may hold, or empty where any value of its kind will do.
+  ///
+  /// Most values are carried rather than decided: a domain, a mailbox, a credential. A few are
+  /// DECIDED on — a role is one of two words, a stage one of three — and for those the kind is not
+  /// the whole of what is legal. Saying so here rather than inside the step that reads it buys three
+  /// things at once:
+  ///
+  /// - a value outside the set is refused BEFORE the run starts, with the set in the message, rather
+  ///   than blocking a step somewhere in the middle of an installation
+  /// - the client renders a CHOICE instead of a free-text box, which is the whole promise of building
+  ///   the form from the declaration and is least keepable exactly where a typo is most likely
+  /// - a check probing every step reads the legal values the way it already reads the kinds, instead
+  ///   of carrying a hand-written list of its own that has to agree with the steps
+  ///
+  /// Only text has such a set: a flag already has two values, and a number or a list of text has no
+  /// small closed one worth writing out.
+  final List<String> allowed;
+
   /// Whether a value stands in for it when a program does not give it.
   bool get hasDefault => defaultValue != null;
 
   /// Whether [value] is of the kind this argument holds.
+  ///
+  /// The kind ONLY. Whether it is one of the values this argument may hold is [permits], asked
+  /// separately so a wrong kind and a wrong value produce different sentences: "this holds text and
+  /// was given an int" and "this holds one of master, slave" are different mistakes, and telling an
+  /// operator the first when they made the second sends them looking in the wrong place.
   bool accepts(Object value) => switch (kind) {
     ArgumentKind.text => value is String,
     ArgumentKind.integer => value is int,
     ArgumentKind.flag => value is bool,
     ArgumentKind.textList => value is List<String>,
   };
+
+  /// Whether [value] is one of the values this argument may hold.
+  ///
+  /// True where none are declared: an argument with no closed set permits anything of its kind.
+  bool permits(Object value) => allowed.isEmpty || (value is String && allowed.contains(value));
 }
 
 /// The values a program gave one step.

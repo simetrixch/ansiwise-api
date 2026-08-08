@@ -48,6 +48,9 @@ final class ProgramsEndpoint {
           'describes': spec.describes,
           'required': spec.required,
           'secret': spec.secret,
+          // Absent where anything of the kind will do, so a client tells "one of these" from "any
+          // text" by whether the key is there rather than by an empty list it has to interpret.
+          if (spec.allowed.isNotEmpty) 'allowed': spec.allowed,
           // A secret has no default — the loader refuses one — so this can never carry a
           // credential out.
           if (spec.hasDefault) 'default': spec.defaultValue,

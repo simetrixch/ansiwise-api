@@ -140,15 +140,52 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
       refusals.add(line, '"$name" is secret, so it cannot have a default');
       continue;
     }
+    // The values this answer may hold, where it is one of a small closed set. Only text has one:
+    // a flag already has two values, and a number or a list of text has no small closed set worth
+    // writing out — so declaring one on those is refused rather than quietly ignored.
+    final Object? permitted = entry['allowed'];
+    final List<String> allowed = <String>[];
+    if (permitted != null) {
+      if (resolved != ArgumentKind.text) {
+        refusals.add(line, '"$name" holds ${resolved.name}, and only text may name allowed values');
+        continue;
+      }
+      if (permitted is! YamlList || permitted.isEmpty) {
+        refusals.add(line, '"$name": "allowed" is a non-empty list of the values it may hold');
+        continue;
+      }
+      for (final Object? each in permitted) {
+        if (each is! String || each.isEmpty) {
+          refusals.add(line, '"$name": "$each" is not a value it could hold');
+          continue;
+        }
+        allowed.add(each);
+      }
+    }
+
     final Object? unwrapped = fallback is YamlList
         ? <String>[for (final Object? v in fallback) '$v']
         : fallback;
     if (unwrapped != null) {
-      final ArgumentSpec probe = ArgumentSpec(name: name, kind: resolved, describes: describes);
+      final ArgumentSpec probe = ArgumentSpec(
+        name: name,
+        kind: resolved,
+        describes: describes,
+        allowed: allowed,
+      );
       if (!probe.accepts(unwrapped)) {
         refusals.add(
           line,
           '"$name" holds ${resolved.name}, and its default is ${unwrapped.runtimeType}',
+        );
+        continue;
+      }
+      // A default outside the set the same declaration names is a value the file itself calls
+      // illegal, standing in wherever a program says nothing about the answer.
+      if (!probe.permits(unwrapped)) {
+        refusals.add(
+          line,
+          '"$name" holds one of ${allowed.join(', ')}, and its default is "$unwrapped"',
         );
         continue;
       }
@@ -162,6 +199,7 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
         required: isRequired as bool? ?? true,
         secret: isSecret as bool? ?? false,
         defaultValue: unwrapped,
+        allowed: allowed,
       ),
     );
   }
@@ -179,6 +217,7 @@ const Set<String> _answerKeys = <String>{
   'required',
   'secret',
   'default',
+  'allowed',
 };
 
 /// The kinds an answer may declare, as a program file writes them.
