@@ -44,7 +44,7 @@ roles: [master]
 steps:
   - step: $step
     path: $path
-    on_failure: die
+    on_failure: exit
 ''';
 
   FakeFiles filesWith(Map<String, String> entries) => FakeFiles(<String, String>{

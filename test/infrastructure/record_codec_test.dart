@@ -162,12 +162,12 @@ void main() {
           sequence: 12,
           at: at,
           step: step,
-          verdict: const Died('the postcondition does not hold'),
+          verdict: const Failed('the postcondition does not hold', policy: OnFailure.exit),
           elapsed: const Duration(milliseconds: 1500),
         ),
       );
-      expect(back.verdict, isA<Died>());
-      expect((back.verdict as Died).reason, 'the postcondition does not hold');
+      expect(back.verdict, isA<Failed>());
+      expect((back.verdict as Failed).reason, 'the postcondition does not hold');
       expect(back.elapsed, const Duration(milliseconds: 1500));
     });
 
@@ -219,9 +219,12 @@ void main() {
 
       expect(back(const Succeeded()), isA<Succeeded>());
       expect((back(const Skipped('cluster_is_up')) as Skipped).predicate, 'cluster_is_up');
-      expect((back(const Warned('slow')) as Warned).reason, 'slow');
-      expect((back(const Issued('no issuer')) as Issued).reason, 'no issuer');
-      expect((back(const Died('gone')) as Died).reason, 'gone');
+      expect((back(const Failed('slow', policy: OnFailure.continueRun)) as Failed).reason, 'slow');
+      expect(
+        (back(const Failed('no issuer', policy: OnFailure.continueRun)) as Failed).reason,
+        'no issuer',
+      );
+      expect((back(const Failed('gone', policy: OnFailure.exit)) as Failed).reason, 'gone');
     });
 
     test('every plan survives', () {
@@ -290,7 +293,7 @@ void main() {
             source: 'lib/src/steps/thing.dart:14',
             start: at,
             end: at.add(const Duration(seconds: 30)),
-            verdict: const Issued('no certificate'),
+            verdict: const Failed('no certificate', policy: OnFailure.continueRun),
             firstEvent: 3,
             lastEvent: 11,
             plan: const DiffPlan('/etc/thing.yaml', before: '', after: 'a: 1'),
@@ -315,7 +318,7 @@ void main() {
       expect(row.elapsed, const Duration(seconds: 30));
       expect(row.firstEvent, 3);
       expect(row.lastEvent, 11);
-      expect(row.verdict, isA<Issued>());
+      expect(row.verdict, isA<Failed>());
       expect(row.plan, isA<DiffPlan>());
       expect((row.plan as DiffPlan?)?.after, 'a: 1');
       expect(row.issues, <String>['no certificate']);

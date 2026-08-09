@@ -303,11 +303,11 @@ final class StepExecution {
     undo: resolved.entry.undo,
   );
 
-  Verdict _verdictFor(OnFailure policy, String reason) => switch (policy) {
-    OnFailure.die => Died(reason),
-    OnFailure.issue => Issued(reason),
-    OnFailure.warn => Warned(reason),
-  };
+  /// The verdict of a step that failed under [policy].
+  ///
+  /// One verdict, told what the program said. Whether the run goes on is the policy's business and
+  /// not a second class of failure.
+  Verdict _verdictFor(OnFailure policy, String reason) => Failed(reason, policy: policy);
 
   StepOutcome _finish({
     required ResolvedStep resolved,
@@ -339,7 +339,11 @@ final class StepExecution {
         firstEvent: firstEvent,
         lastEvent: lastEvent,
         plan: plan,
-        issues: verdict is Issued ? <String>[verdict.reason] : const <String>[],
+        // A failure the run carried on past is what the closing line reports. One that ended the
+        // run needs no entry here: the run stopped, and the record's last step is the reason.
+        issues: verdict is Failed && verdict.continues
+            ? <String>[verdict.reason]
+            : const <String>[],
       ),
       applied: applied,
     );

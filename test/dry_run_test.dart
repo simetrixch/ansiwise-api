@@ -22,7 +22,7 @@ void main() {
             ),
           ).resolve(
             programOf('p', <(String, OnFailure, List<String>)>[
-              ('mutates_while_checking', OnFailure.die, <String>[]),
+              ('mutates_while_checking', OnFailure.exit, <String>[]),
             ]),
           );
 
@@ -33,8 +33,8 @@ void main() {
       );
 
       expect(h.files.written, isEmpty, reason: 'the write must never have reached the machine');
-      expect(record.steps.single.verdict, isA<Died>());
-      expect((record.steps.single.verdict as Died).reason, contains('refused while planning'));
+      expect(record.steps.single.verdict, isA<Failed>());
+      expect((record.steps.single.verdict as Failed).reason, contains('refused while planning'));
     });
 
     test('a step that runs a changing command from inside its plan is refused', () async {
@@ -48,7 +48,7 @@ void main() {
             ),
           ).resolve(
             programOf('p', <(String, OnFailure, List<String>)>[
-              ('mutates_while_planning', OnFailure.die, <String>[]),
+              ('mutates_while_planning', OnFailure.exit, <String>[]),
             ]),
           );
 
@@ -75,7 +75,7 @@ void main() {
             ),
           ).resolve(
             programOf('p', <(String, OnFailure, List<String>)>[
-              ('writes_a_file', OnFailure.die, <String>[]),
+              ('writes_a_file', OnFailure.exit, <String>[]),
             ]),
           );
 
@@ -111,7 +111,7 @@ void main() {
             ),
           ).resolve(
             programOf('p', <(String, OnFailure, List<String>)>[
-              ('writes_a_file', OnFailure.die, <String>[]),
+              ('writes_a_file', OnFailure.exit, <String>[]),
             ]),
           );
 

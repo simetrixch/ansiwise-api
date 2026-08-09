@@ -20,7 +20,7 @@ void main() {
         ),
       ).resolve(
         programOf('p', <(String, OnFailure, List<String>)>[
-          ('writes', OnFailure.die, <String>['has_two_nics']),
+          ('writes', OnFailure.exit, <String>['has_two_nics']),
         ]),
       );
 
@@ -79,8 +79,8 @@ void main() {
           ),
         ).resolve(
           programOf('p', <(String, OnFailure, List<String>)>[
-            ('a', OnFailure.die, <String>['counted']),
-            ('b', OnFailure.die, <String>['counted']),
+            ('a', OnFailure.exit, <String>['counted']),
+            ('b', OnFailure.exit, <String>['counted']),
           ]),
         );
 

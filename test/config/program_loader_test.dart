@@ -17,14 +17,14 @@ roles: [master, slave]
 steps:
   - step: write_config_file
     channel: "1.34/stable"
-    on_failure: die
+    on_failure: exit
   - step: enable_addons
     addons: [dns, hostpath-storage, ingress]
     retries: 3
-    on_failure: die
+    on_failure: exit
   - step: configure_public_source_routing
     when: [has_two_nics]
-    on_failure: warn
+    on_failure: continue
 ''';
 
     test('reads the name, the roles and every entry in order', () {
@@ -44,9 +44,9 @@ steps:
       final Program program = loadProgram(source, where: 'deploy-cluster.yaml');
 
       expect(program.steps.map((ProgramStep s) => s.onFailure), <OnFailure>[
-        OnFailure.die,
-        OnFailure.die,
-        OnFailure.warn,
+        OnFailure.exit,
+        OnFailure.exit,
+        OnFailure.continueRun,
       ]);
     });
 
@@ -81,7 +81,7 @@ roles: [master]
 steps:
   - step: write_config_file
     classic: true
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml');
 
       expect(program.steps.single.arguments.flag('classic'), isTrue);
@@ -138,7 +138,7 @@ name: p
 roles: [master]
 stpes:
   - step: write_config_file
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('a program does not have a key "stpes"')),
       );
@@ -154,7 +154,7 @@ roles: &roles [master]
 steps:
   - step: write_config_file
     hosts: *roles
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('an anchor or alias')),
       );
@@ -168,7 +168,7 @@ roles: [master]
 steps:
   - step: write_config_file
     channel: &channel "1.34/stable"
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('line 5: an anchor or alias')),
       );
@@ -180,7 +180,7 @@ steps:
 name: p
 roles: [master]
 defaults: &defaults
-  on_failure: die
+  on_failure: exit
 steps:
   - step: write_config_file
     <<: *defaults
@@ -281,7 +281,7 @@ steps:
 name: p
 roles: [master]
 steps:
-  - on_failure: die
+  - on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('steps[0] has no "step"')),
       );
@@ -294,7 +294,7 @@ name: p
 roles: [master]
 steps:
   - step: Copy-Files
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('"Copy-Files" is not a step name')),
       );
@@ -307,7 +307,7 @@ name: p
 roles: [master]
 steps:
   - step: [a]
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('"step" is text, and the file gives a list')),
       );
@@ -324,7 +324,7 @@ steps:
   - step: write_config_file
 ''', where: 'p.yaml'),
         refusesWith(
-          contains('steps[0] write_config_file has no "on_failure" — say die, issue or warn'),
+          contains('steps[0] write_config_file has no "on_failure" — say exit or continue'),
         ),
       );
     });
@@ -338,7 +338,7 @@ steps:
   - step: write_config_file
     on_failure: abort
 ''', where: 'p.yaml'),
-        refusesWith(contains('"on_failure" is "abort", and it is one of die, issue or warn')),
+        refusesWith(contains('"on_failure" is "abort", and it is exit or continue')),
       );
     });
 
@@ -351,9 +351,7 @@ steps:
   - step: write_config_file
     on_failure: true
 ''', where: 'p.yaml'),
-        refusesWith(
-          contains('"on_failure" is one of die, issue or warn, and the file gives true or false'),
-        ),
+        refusesWith(contains('"on_failure" is exit or continue, and the file gives true or false')),
       );
     });
   });
@@ -367,7 +365,7 @@ roles: [master]
 steps:
   - step: write_config_file
     when: has_two_nics
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('"when" is a list of predicate names, and the file gives text')),
       );
@@ -381,7 +379,7 @@ roles: [master]
 steps:
   - step: write_config_file
     when: [7]
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('"when" holds predicate names, and the file gives a whole number')),
       );
@@ -395,7 +393,7 @@ roles: [master]
 steps:
   - step: write_config_file
     when: [HasTwoNics]
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('"HasTwoNics" is not a predicate name')),
       );
@@ -411,7 +409,7 @@ roles: [master]
 steps:
   - step: write_config_file
     channel:
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('"channel" has no value')),
       );
@@ -426,7 +424,7 @@ steps:
   - step: write_config_file
     channel:
       track: "1.34"
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('"channel" is a map, and no argument holds a map')),
       );
@@ -440,7 +438,7 @@ roles: [master]
 steps:
   - step: enable_addons
     addons: [dns, 7]
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml'),
         refusesWith(contains('the list "addons" holds text, and one entry is a whole number')),
       );
@@ -462,7 +460,7 @@ steps:
         expect(refused.message, contains('is not a program name'));
         expect(refused.message, contains('"roles" is empty'));
         expect(refused.message, contains('is not a step name'));
-        expect(refused.message, contains('is one of die, issue or warn'));
+        expect(refused.message, contains('is exit or continue'));
         expect(refused.message.split('\n'), hasLength(4));
       }
     });
@@ -475,7 +473,7 @@ roles: []
 steps:
   - step: write_config_file
     channel: &channel "1.34/stable"
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml');
         fail('the file must be refused');
       } on ProgramInvalid catch (refused) {
@@ -513,7 +511,7 @@ steps:
     on_failure: abort
   - step: enable_addons
     when: [HasTwoNics]
-    on_failure: die
+    on_failure: exit
 ''', where: 'p.yaml');
         fail('the file must be refused');
       } on ProgramInvalid catch (refused) {

@@ -232,9 +232,7 @@ Verdict _redactedVerdict(Verdict verdict, Redactor redactor) => switch (verdict)
   // Nothing to hide in either: one carries no text at all, and the other carries the registered
   // name of a predicate, which is an identifier and not a value read off the machine.
   Succeeded() || Skipped() => verdict,
-  final Warned v => Warned(redactor.hide(v.reason)),
-  final Issued v => Issued(redactor.hide(v.reason)),
-  final Died v => Died(redactor.hide(v.reason)),
+  final Failed v => Failed(redactor.hide(v.reason), policy: v.policy),
 };
 
 StepPlan _redactedPlan(StepPlan plan, Redactor redactor) => switch (plan) {

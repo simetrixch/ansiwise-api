@@ -128,7 +128,7 @@ void main() {
           sequence: s,
           at: at,
           step: step,
-          verdict: const Died('login $secret returned 1'),
+          verdict: const Failed('login $secret returned 1', policy: OnFailure.exit),
           elapsed: Duration.zero,
         ),
       );

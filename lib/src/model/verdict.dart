@@ -4,17 +4,26 @@ import 'on_failure.dart';
 
 /// How one step ended.
 ///
-/// Sealed, so every place that reacts to a verdict must handle all five cases. Adding a sixth
+/// Sealed, so every place that reacts to a verdict must handle all three cases. Adding a fourth
 /// breaks the build at every such place instead of falling into somebody's default branch.
+///
+/// **Three, where there used to be five.** A step that failed and ended the run, a step that failed
+/// and was carried to the end as a problem, and a step that failed and was only noted were three
+/// classes for one thing. What differed between them was not what the step did — it failed — but
+/// what the program said should happen next, and how loudly it was written down. Both of those are
+/// recorded elsewhere and were being restated here as a third and a fourth word.
 @immutable
 sealed class Verdict {
   const Verdict();
 
   /// A short lower-case word naming this verdict, used in the record and in the command line
-  /// output. It is the same vocabulary the program files use for [OnFailure].
+  /// output.
   String get label;
 
   /// Whether the run may continue past this step.
+  ///
+  /// For a failure this is not the verdict's own property. It is what the program's [OnFailure] said
+  /// for that row, which is why [Failed] is told rather than asked.
   bool get continues;
 }
 
@@ -50,53 +59,26 @@ final class Skipped extends Verdict {
   bool get continues => true;
 }
 
-/// The step failed and the program declared [OnFailure.warn] for it.
-@immutable
-final class Warned extends Verdict {
-  /// Creates the verdict of a failed step whose failure is noted and otherwise ignored.
-  const Warned(this.reason);
-
-  /// What the operator is told about the failure.
-  final String reason;
-
-  @override
-  String get label => 'warn';
-
-  @override
-  bool get continues => true;
-}
-
-/// The step failed and the program declared [OnFailure.issue] for it.
+/// The step failed.
 ///
-/// The run continues; the reason is carried to the end of the run and reported there, so an
-/// installation that finished with three of these says so instead of looking clean.
+/// **One verdict for every failure, whatever the run did afterwards.** Whether the run went on is
+/// the program's `on_failure` for that row, carried here as [policy] rather than turned into a
+/// second and a third class. How bad it was is the level the failure was written at, which every
+/// step does whatever a program file says. Each fact is stated once.
 @immutable
-final class Issued extends Verdict {
-  /// Creates the verdict of a failed step whose failure is carried to the end of the run.
-  const Issued(this.reason);
-
-  /// What the operator is told about the failure, and what the end-of-run report repeats.
-  final String reason;
-
-  @override
-  String get label => 'issue';
-
-  @override
-  bool get continues => true;
-}
-
-/// The step failed and the program declared [OnFailure.die] for it. The run ends here.
-@immutable
-final class Died extends Verdict {
-  /// Creates the verdict of a failed step that ends the run.
-  const Died(this.reason);
+final class Failed extends Verdict {
+  /// Creates the verdict of a step that failed, under the program's [policy] for that row.
+  const Failed(this.reason, {required this.policy});
 
   /// What the operator is told about the failure.
   final String reason;
 
-  @override
-  String get label => 'die';
+  /// What the program said a failure of this step costs the run.
+  final OnFailure policy;
 
   @override
-  bool get continues => false;
+  String get label => writtenFor(policy);
+
+  @override
+  bool get continues => policy == OnFailure.continueRun;
 }

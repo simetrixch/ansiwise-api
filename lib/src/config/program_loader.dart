@@ -231,13 +231,6 @@ const Map<String, ArgumentKind> _answerKinds = <String, ArgumentKind>{
 /// The keys of a step entry the loader reads. Every other key of an entry is an argument.
 const Set<String> _stepKeys = <String>{'step', 'on_failure', 'when', 'undo'};
 
-/// The whole vocabulary of `on_failure:`, as a program file writes it.
-const Map<String, OnFailure> _policies = <String, OnFailure>{
-  'die': OnFailure.die,
-  'issue': OnFailure.issue,
-  'warn': OnFailure.warn,
-};
-
 /// One thing wrong with a file, and where in it.
 final class _Problem {
   const _Problem(this.line, this.found, this.what);
@@ -517,23 +510,23 @@ StepName? _stepName(YamlMap entry, int index, _Refusals refusals) {
 OnFailure? _onFailure(YamlMap entry, String label, _Refusals refusals) {
   final YamlNode? node = entry.nodes['on_failure'];
   if (node == null) {
-    refusals.add(entry.span.start.line, '$label has no "on_failure" — say die, issue or warn');
+    refusals.add(entry.span.start.line, '$label has no "on_failure" — say exit or continue');
     return null;
   }
   if (node.value case final String written) {
-    final OnFailure? policy = _policies[written];
+    final OnFailure? policy = onFailureWritten[written];
     if (policy != null) {
       return policy;
     }
     refusals.add(
       node.span.start.line,
-      '$label: "on_failure" is "$written", and it is one of die, issue or warn',
+      '$label: "on_failure" is "$written", and it is exit or continue',
     );
     return null;
   }
   refusals.add(
     node.span.start.line,
-    '$label: "on_failure" is one of die, issue or warn, and the file gives ${_kindOf(node)}',
+    '$label: "on_failure" is exit or continue, and the file gives ${_kindOf(node)}',
   );
   return null;
 }

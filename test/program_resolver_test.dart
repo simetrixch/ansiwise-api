@@ -38,7 +38,7 @@ void main() {
     expect(
       () => ProgramResolver(registry()).resolve(
         programOf('p', <(String, OnFailure, List<String>)>[
-          ('no_such_step', OnFailure.die, <String>[]),
+          ('no_such_step', OnFailure.exit, <String>[]),
         ]),
       ),
       throwsA(
@@ -57,7 +57,7 @@ void main() {
         programOf(
           'p',
           <(String, OnFailure, List<String>)>[
-            ('writes_a_file', OnFailure.die, <String>['no_such_condition']),
+            ('writes_a_file', OnFailure.exit, <String>['no_such_condition']),
           ],
           arguments: <String, Arguments>{
             'writes_a_file': const Arguments(<String, Object>{'path': '/x'}),
@@ -78,7 +78,7 @@ void main() {
     expect(
       () => ProgramResolver(registry()).resolve(
         programOf('p', <(String, OnFailure, List<String>)>[
-          ('writes_a_file', OnFailure.die, <String>[]),
+          ('writes_a_file', OnFailure.exit, <String>[]),
         ]),
       ),
       throwsA(
@@ -96,7 +96,7 @@ void main() {
       () => ProgramResolver(registry()).resolve(
         programOf(
           'p',
-          <(String, OnFailure, List<String>)>[('writes_a_file', OnFailure.die, <String>[])],
+          <(String, OnFailure, List<String>)>[('writes_a_file', OnFailure.exit, <String>[])],
           arguments: <String, Arguments>{
             'writes_a_file': const Arguments(<String, Object>{'path': '/x', 'colour': 'blue'}),
           },
@@ -117,7 +117,7 @@ void main() {
       () => ProgramResolver(registry()).resolve(
         programOf(
           'p',
-          <(String, OnFailure, List<String>)>[('writes_a_file', OnFailure.die, <String>[])],
+          <(String, OnFailure, List<String>)>[('writes_a_file', OnFailure.exit, <String>[])],
           arguments: <String, Arguments>{
             'writes_a_file': const Arguments(<String, Object>{'path': 7}),
           },
@@ -137,8 +137,8 @@ void main() {
     try {
       ProgramResolver(registry()).resolve(
         programOf('p', <(String, OnFailure, List<String>)>[
-          ('no_such_step', OnFailure.die, <String>[]),
-          ('writes_a_file', OnFailure.die, <String>['no_such_condition']),
+          ('no_such_step', OnFailure.exit, <String>[]),
+          ('writes_a_file', OnFailure.exit, <String>['no_such_condition']),
         ]),
       );
       fail('the program must be refused');
@@ -155,7 +155,7 @@ void main() {
       programOf(
         'p',
         <(String, OnFailure, List<String>)>[
-          ('writes_a_file', OnFailure.die, <String>['is_master']),
+          ('writes_a_file', OnFailure.exit, <String>['is_master']),
         ],
         arguments: <String, Arguments>{
           'writes_a_file': const Arguments(<String, Object>{'path': '/x'}),
@@ -177,7 +177,7 @@ void main() {
     expect(
       () => const ProgramResolver(_readsTheDomain).resolve(
         programOf('p', <(String, OnFailure, List<String>)>[
-          ('needs_the_domain', OnFailure.die, <String>[]),
+          ('needs_the_domain', OnFailure.exit, <String>[]),
         ]),
       ),
       throwsA(
@@ -194,7 +194,7 @@ void main() {
     final ResolvedProgram resolved = const ProgramResolver(_readsTheDomain).resolve(
       programOf(
         'p',
-        <(String, OnFailure, List<String>)>[('needs_the_domain', OnFailure.die, <String>[])],
+        <(String, OnFailure, List<String>)>[('needs_the_domain', OnFailure.exit, <String>[])],
         answers: const DeclaredAnswers(<ArgumentSpec>[
           ArgumentSpec(name: 'fqdn', kind: ArgumentKind.text, describes: 'the domain'),
         ]),

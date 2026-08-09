@@ -25,7 +25,7 @@ void main() {
           ),
         ).resolve(
           programOf('deploy-host', <(String, OnFailure, List<String>)>[
-            ('writes_a_file', OnFailure.die, <String>[]),
+            ('writes_a_file', OnFailure.exit, <String>[]),
           ]),
         );
     final MemoryRunStore store = MemoryRunStore()

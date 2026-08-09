@@ -12,7 +12,7 @@ void main() {
   // A program with no steps at all is refused by the loader, and rightly: it would do nothing. The
   // step name here is never resolved — loadProgram parses, and binding to the registry is later.
   const String head =
-      'name: deploy-thing\nroles: [master]\nsteps:\n  - step: a_step\n    on_failure: die\n';
+      'name: deploy-thing\nroles: [master]\nsteps:\n  - step: a_step\n    on_failure: exit\n';
 
   group('declaring them', () {
     test('reads a declaration in the order the file wrote it', () {

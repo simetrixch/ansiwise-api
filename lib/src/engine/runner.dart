@@ -149,8 +149,10 @@ final class Runner {
       if (outcome.applied case final AppliedStep entry) {
         applied.add(entry);
       }
-      if (outcome.record.verdict case final Issued issued) {
-        issues.add('${step.entry.step}: ${issued.reason}');
+      // A failure the run carried on past is what the closing line reports. One that ended the run
+      // needs no entry: the run stopped, and the last step of the record is the reason.
+      if (outcome.record.verdict case final Failed failed when failed.continues) {
+        issues.add('${step.entry.step}: ${failed.reason}');
       }
       if (!outcome.continues) {
         return _Walk(records: records, applied: applied, issues: issues, ended: true);

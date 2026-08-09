@@ -1,23 +1,41 @@
-/// What the engine does when a step fails.
+/// What the run does when a step fails.
 ///
-/// A program declares this per step. The three values are the whole vocabulary: a step that fails
-/// either ends the run, or is carried to the end of the run as a reported problem, or is noted and
-/// otherwise ignored.
+/// TWO VALUES, AND THERE IS NOTHING ELSE TO DECIDE HERE. Either the rest of the program still makes
+/// sense without this step or it does not. There is no point installing an addon into a cluster that
+/// never came up; a cluster whose certificate issuer failed still stands, it just cannot issue a
+/// certificate.
+///
+/// WHAT USED TO BE HERE AND WAS NOT A CONTROL DECISION. This carried three values — one that ended
+/// the run and two that did not. What separated those two was how loudly the failure was written
+/// down, which is a LOG LEVEL and not a question about what happens next. Pressed in here it made
+/// the set unreadable: three unrelated English words, no one of which implied the others, so the
+/// only way to learn the set was to guess wrong and read the refusal.
+///
+/// A step logs what happened whatever stands here, and it always did. Nothing in a program file has
+/// to say a second time that a failure was serious.
 enum OnFailure {
   /// The run ends here. Nothing after this step is attempted.
-  ///
-  /// For a step whose successors cannot work without it — there is no point installing an addon
-  /// into a cluster that never came up.
-  die,
+  exit,
 
-  /// The run continues, and the failure is carried to the end and reported there.
+  /// The run goes on.
   ///
-  /// For a step whose absence leaves the machine usable but incomplete: a cluster without a working
-  /// certificate issuer stands, it just cannot issue a certificate.
-  issue,
-
-  /// The run continues and the failure is recorded, but it is not carried to the end.
-  ///
-  /// For a step that is a convenience rather than a requirement.
-  warn,
+  /// The failure is recorded either way — a step that failed said so, and the run's closing line
+  /// reports it. What this value decides is only that the run carried on.
+  continueRun,
 }
+
+/// What a program file writes for each of [OnFailure], and what the record reports back.
+///
+/// The same word in both, so an operator who wrote one reads the same one afterwards. `continue` is
+/// a reserved word in Dart, which is the only reason the enum value beside it is spelled
+/// differently; the file and the record use the word a person would.
+const Map<String, OnFailure> onFailureWritten = <String, OnFailure>{
+  'exit': OnFailure.exit,
+  'continue': OnFailure.continueRun,
+};
+
+/// The word [policy] is written as, in a program file and in the record.
+String writtenFor(OnFailure policy) => switch (policy) {
+  OnFailure.exit => 'exit',
+  OnFailure.continueRun => 'continue',
+};

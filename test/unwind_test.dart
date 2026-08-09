@@ -22,9 +22,9 @@ void main() {
         ),
       ).resolve(
         programOf('p', <(String, OnFailure, List<String>)>[
-          ('first', OnFailure.die, <String>[]),
-          ('second', OnFailure.die, <String>[]),
-          ('fails', OnFailure.die, <String>[]),
+          ('first', OnFailure.exit, <String>[]),
+          ('second', OnFailure.exit, <String>[]),
+          ('fails', OnFailure.exit, <String>[]),
         ]),
       );
 
@@ -48,8 +48,8 @@ void main() {
           ),
         ).resolve(
           programOf('p', <(String, OnFailure, List<String>)>[
-            ('fails', OnFailure.die, <String>[]),
-            ('never', OnFailure.die, <String>[]),
+            ('fails', OnFailure.exit, <String>[]),
+            ('never', OnFailure.exit, <String>[]),
           ]),
         );
 
@@ -74,8 +74,8 @@ void main() {
           ),
         ).resolve(
           programOf('p', <(String, OnFailure, List<String>)>[
-            ('first', OnFailure.die, <String>[]),
-            ('fails', OnFailure.die, <String>[]),
+            ('first', OnFailure.exit, <String>[]),
+            ('fails', OnFailure.exit, <String>[]),
           ]),
         );
 
@@ -100,8 +100,8 @@ void main() {
           ),
         ).resolve(
           programOf('p', <(String, OnFailure, List<String>)>[
-            ('irreversible', OnFailure.warn, <String>[]),
-            ('fails', OnFailure.die, <String>[]),
+            ('irreversible', OnFailure.continueRun, <String>[]),
+            ('fails', OnFailure.exit, <String>[]),
           ]),
         );
 
@@ -147,9 +147,9 @@ void main() {
           programOf(
             'p',
             <(String, OnFailure, List<String>)>[
-              ('first', OnFailure.die, <String>[]),
-              ('second', OnFailure.die, <String>[]),
-              ('fails', OnFailure.die, <String>[]),
+              ('first', OnFailure.exit, <String>[]),
+              ('second', OnFailure.exit, <String>[]),
+              ('fails', OnFailure.exit, <String>[]),
             ],
             undoOff: <String>{'second'},
           ),

@@ -45,7 +45,7 @@ void main() {
       ).resolve(
         programOf(
           'deploy-cluster',
-          <(String, OnFailure, List<String>)>[('writes_a_file', OnFailure.die, <String>[])],
+          <(String, OnFailure, List<String>)>[('writes_a_file', OnFailure.exit, <String>[])],
           arguments: <String, Arguments>{
             'writes_a_file': Arguments(<String, Object>{'path': path}),
           },

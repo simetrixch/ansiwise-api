@@ -46,7 +46,7 @@ void main() {
         ),
       ).resolve(
         programOf('deploy-thing', <(String, OnFailure, List<String>)>[
-          ('runs_a_command', OnFailure.die, <String>[]),
+          ('runs_a_command', OnFailure.exit, <String>[]),
         ], answers: declared),
       );
 
@@ -62,7 +62,7 @@ void main() {
         ),
       ).resolve(
         programOf('needs-nothing', <(String, OnFailure, List<String>)>[
-          ('runs_a_command', OnFailure.die, <String>[]),
+          ('runs_a_command', OnFailure.exit, <String>[]),
         ]),
       );
 

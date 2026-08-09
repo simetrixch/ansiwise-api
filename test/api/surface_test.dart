@@ -39,8 +39,8 @@ void main() {
         programOf(
           'deploy-cluster',
           <(String, OnFailure, List<String>)>[
-            ('writes_a_file', OnFailure.die, <String>[]),
-            ('runs_a_command', OnFailure.warn, <String>['has_two_nics']),
+            ('writes_a_file', OnFailure.exit, <String>[]),
+            ('runs_a_command', OnFailure.continueRun, <String>['has_two_nics']),
           ],
           arguments: <String, Arguments>{
             'writes_a_file': const Arguments(<String, Object>{
@@ -95,7 +95,7 @@ void main() {
       final Map<String, Object?> body = await get(build().api, '/programs/deploy-cluster');
       final Map<String, Object?> step = objectAt(listAt(body, 'steps'), 0);
       expect(step['source'], 'deployment/lib/steps/writes_a_file.dart:12');
-      expect(step['on_failure'], 'die');
+      expect(step['on_failure'], 'exit');
     });
 
     test('a step says whether it can be taken back, and why not when it cannot', () async {

@@ -35,8 +35,8 @@ void main() {
 
   group('a program every step of which can be taken back', () {
     final ResolvedProgram reversible = programWith(<(String, OnFailure, List<String>)>[
-      ('writes_one', OnFailure.die, <String>[]),
-      ('writes_two', OnFailure.die, <String>[]),
+      ('writes_one', OnFailure.exit, <String>[]),
+      ('writes_two', OnFailure.exit, <String>[]),
     ]);
 
     test('has no point of no return', () {
@@ -56,9 +56,9 @@ void main() {
 
   group('a step that cannot be taken back by its own nature', () {
     final ResolvedProgram withAMint = programWith(<(String, OnFailure, List<String>)>[
-      ('writes_one', OnFailure.die, <String>[]),
-      ('mints', OnFailure.die, <String>[]),
-      ('writes_two', OnFailure.die, <String>[]),
+      ('writes_one', OnFailure.exit, <String>[]),
+      ('mints', OnFailure.exit, <String>[]),
+      ('writes_two', OnFailure.exit, <String>[]),
     ]);
 
     test('is the boundary, and it is the FIRST such step', () {
@@ -94,8 +94,8 @@ void main() {
   group('a reversible step the program switched off', () {
     final ResolvedProgram withUndoOff = programWith(
       <(String, OnFailure, List<String>)>[
-        ('writes_one', OnFailure.die, <String>[]),
-        ('writes_two', OnFailure.die, <String>[]),
+        ('writes_one', OnFailure.exit, <String>[]),
+        ('writes_two', OnFailure.exit, <String>[]),
       ],
       undoOff: <String>{'writes_two'},
     );
@@ -120,8 +120,8 @@ void main() {
       expect(
         pointOfNoReturn(
           programWith(<(String, OnFailure, List<String>)>[
-            ('writes_one', OnFailure.die, <String>[]),
-            ('writes_two', OnFailure.die, <String>[]),
+            ('writes_one', OnFailure.exit, <String>[]),
+            ('writes_two', OnFailure.exit, <String>[]),
           ]),
         ),
         isNull,
@@ -138,8 +138,8 @@ void main() {
       expect(
         pointOfNoReturn(
           programWith(<(String, OnFailure, List<String>)>[
-            ('measures', OnFailure.die, <String>[]),
-            ('writes_one', OnFailure.die, <String>[]),
+            ('measures', OnFailure.exit, <String>[]),
+            ('writes_one', OnFailure.exit, <String>[]),
           ]),
         ),
         isNull,
@@ -151,9 +151,9 @@ void main() {
     test('is listed in the order the steps run, not only the first', () {
       final ResolvedProgram several = programWith(
         <(String, OnFailure, List<String>)>[
-          ('writes_one', OnFailure.die, <String>[]),
-          ('mints', OnFailure.die, <String>[]),
-          ('writes_two', OnFailure.die, <String>[]),
+          ('writes_one', OnFailure.exit, <String>[]),
+          ('mints', OnFailure.exit, <String>[]),
+          ('writes_two', OnFailure.exit, <String>[]),
         ],
         undoOff: <String>{'writes_two'},
       );

@@ -23,7 +23,7 @@ void main() {
         ),
       ).resolve(
         programOf('p', <(String, OnFailure, List<String>)>[
-          ('writes_a_file', OnFailure.die, <String>[]),
+          ('writes_a_file', OnFailure.exit, <String>[]),
         ]),
       );
 
@@ -84,7 +84,7 @@ void main() {
             },
           ),
         ).resolve(
-          programOf('p', <(String, OnFailure, List<String>)>[('runs', OnFailure.die, <String>[])]),
+          programOf('p', <(String, OnFailure, List<String>)>[('runs', OnFailure.exit, <String>[])]),
         );
 
     // The fake shell does not create files, so the postcondition is arranged the way the machine

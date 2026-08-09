@@ -22,14 +22,14 @@ void main() {
   test('a step whose command succeeds but whose postcondition does not holds fails', () async {
     final Harness h = Harness();
     final RunRecord record = await h.runner.run(
-      program: programWith((Arguments a) => const ClaimsSuccessWithout(), OnFailure.die),
+      program: programWith((Arguments a) => const ClaimsSuccessWithout(), OnFailure.exit),
       mode: Mode.run,
       header: h.header(),
     );
 
     expect(h.shell.ran, <String>['true'], reason: 'the command ran and returned zero');
-    expect(record.steps.single.verdict, isA<Died>());
-    expect((record.steps.single.verdict as Died).reason, contains('still not in the state'));
+    expect(record.steps.single.verdict, isA<Failed>());
+    expect((record.steps.single.verdict as Failed).reason, contains('still not in the state'));
     expect(record.exitCode, 1);
   });
 
@@ -38,7 +38,7 @@ void main() {
     final RunRecord record = await h.runner.run(
       program: programWith(
         (Arguments a) => WritesAFile(path: '/etc/thing', content: 'x'),
-        OnFailure.die,
+        OnFailure.exit,
       ),
       mode: Mode.run,
       header: h.header(),
@@ -53,38 +53,45 @@ void main() {
     test('die ends the run', () async {
       final Harness h = Harness();
       final RunRecord record = await h.runner.run(
-        program: programWith((Arguments a) => const Blocks('no disk'), OnFailure.die),
+        program: programWith((Arguments a) => const Blocks('no disk'), OnFailure.exit),
         mode: Mode.run,
         header: h.header(),
       );
-      expect(record.steps.single.verdict, isA<Died>());
+      expect(record.steps.single.verdict, isA<Failed>());
       expect(record.exitCode, 1);
       expect(record.issues, isEmpty);
     });
 
-    test('issue carries the reason to the end of the run', () async {
+    test('a failure the run carried on past is reported at the end', () async {
+      // There used to be two ways of carrying on — one reported at the end and one not — and the
+      // difference between them was how loudly the failure was written down rather than what
+      // happened next. A run that walked past a failure and came back looking clean is the one
+      // outcome this cannot produce, so every continued failure is in the closing line.
       final Harness h = Harness();
       final RunRecord record = await h.runner.run(
-        program: programWith((Arguments a) => const Blocks('no disk'), OnFailure.issue),
+        program: programWith((Arguments a) => const Blocks('no disk'), OnFailure.continueRun),
         mode: Mode.run,
         header: h.header(),
       );
-      expect(record.steps.single.verdict, isA<Issued>());
+      expect(record.steps.single.verdict, isA<Failed>());
       expect(record.issues, <String>['the_step: no disk']);
       expect(record.exitCode, 2, reason: 'a run that finished with problems must not look clean');
       expect(record.clean, isFalse);
     });
 
-    test('warn is recorded and costs nothing', () async {
+    test('a failure that ended the run is not repeated in the closing line', () async {
+      // The run stopped, and the last step of the record IS the reason. Repeating it at the end
+      // would be the same failure counted twice, in a place whose whole job is to say what a run
+      // that finished green nevertheless walked past.
       final Harness h = Harness();
       final RunRecord record = await h.runner.run(
-        program: programWith((Arguments a) => const Blocks('no disk'), OnFailure.warn),
+        program: programWith((Arguments a) => const Blocks('no disk'), OnFailure.exit),
         mode: Mode.run,
         header: h.header(),
       );
-      expect(record.steps.single.verdict, isA<Warned>());
+      expect(record.steps.single.verdict, isA<Failed>());
       expect(record.issues, isEmpty);
-      expect(record.exitCode, 0);
+      expect(record.exitCode, 1);
     });
   });
 
@@ -100,8 +107,8 @@ void main() {
           ),
         ).resolve(
           programOf('p', <(String, OnFailure, List<String>)>[
-            ('blocks', OnFailure.die, <String>[]),
-            ('writes', OnFailure.die, <String>[]),
+            ('blocks', OnFailure.exit, <String>[]),
+            ('writes', OnFailure.exit, <String>[]),
           ]),
         );
 

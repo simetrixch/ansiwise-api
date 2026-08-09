@@ -2,6 +2,7 @@ import '../api/record_json.dart';
 import '../model/check_result.dart';
 import '../model/mode.dart';
 import '../model/names.dart';
+import '../model/on_failure.dart';
 import '../model/run_event.dart';
 import '../model/run_record.dart';
 import '../model/step_plan.dart';
@@ -218,9 +219,7 @@ final class RecordCodec implements RecordJson {
     ...switch (verdict) {
       Succeeded() => const <String, Object?>{},
       final Skipped v => <String, Object?>{'predicate': v.predicate},
-      final Warned v => <String, Object?>{'reason': v.reason},
-      final Issued v => <String, Object?>{'reason': v.reason},
-      final Died v => <String, Object?>{'reason': v.reason},
+      final Failed v => <String, Object?>{'reason': v.reason},
     },
   };
 
@@ -230,9 +229,10 @@ final class RecordCodec implements RecordJson {
     return switch (label) {
       'ok' => const Succeeded(),
       'skipped' => Skipped(_text(json, 'predicate')),
-      'warn' => Warned(_text(json, 'reason')),
-      'issue' => Issued(_text(json, 'reason')),
-      'die' => Died(_text(json, 'reason')),
+      // The label of a failure IS what the program said it costs the run, so reading the label back
+      // is reading the policy back. One word carries both, which is why there is no second field.
+      'exit' => Failed(_text(json, 'reason'), policy: OnFailure.exit),
+      'continue' => Failed(_text(json, 'reason'), policy: OnFailure.continueRun),
       _ => throw FormatException('there is no verdict called "$label"'),
     };
   }

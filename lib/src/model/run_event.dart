@@ -1,7 +1,6 @@
 import 'package:meta/meta.dart';
 
 import 'names.dart';
-import 'on_failure.dart';
 import 'step_plan.dart';
 import 'verdict.dart';
 
@@ -341,8 +340,12 @@ final class RunFinished extends RunEvent {
   /// What the process returns to whatever started it.
   final int exitCode;
 
-  /// Everything a step reported under [OnFailure.issue], repeated here so a run that finished with
-  /// three problems says so rather than looking clean.
+  /// Every failure the run carried on past, repeated here so a run that finished with three
+  /// problems says so rather than looking clean.
+  ///
+  /// A failure that ENDED the run is not among them: the run stopped, and the last step of the
+  /// record is the reason. What is here is what somebody would otherwise have to find by reading
+  /// every step of a run that came back green.
   final List<String> issues;
 
   @override
