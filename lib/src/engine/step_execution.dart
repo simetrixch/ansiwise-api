@@ -35,7 +35,12 @@ import 'unwind.dart';
 /// succeeded; a step whose postcondition holds afterwards has.
 final class StepExecution {
   /// Creates an execution against [machine], reporting to [recorder].
-  const StepExecution({required this.machine, required this.recorder, required this.redactor});
+  const StepExecution({
+    required this.machine,
+    required this.recorder,
+    required this.redactor,
+    this.logLevel = LogLevel.info,
+  });
 
   /// What the steps act on.
   final Machine machine;
@@ -45,6 +50,9 @@ final class StepExecution {
 
   /// What is removed on the way into the record.
   final Redactor redactor;
+
+  /// The quietest level this run writes, carried from the runner.
+  final LogLevel logLevel;
 
   /// Runs [resolved] in [mode], given what the predicates found in [facts].
   ///
@@ -247,7 +255,12 @@ final class StepExecution {
     Facts facts,
     Arguments answers,
   ) {
-    final RecordingLogger log = RecordingLogger(recorder: recorder, redactor: redactor, step: name);
+    final RecordingLogger log = RecordingLogger(
+      recorder: recorder,
+      redactor: redactor,
+      step: name,
+      threshold: logLevel,
+    );
     final Machine recording = Machine(
       shell: RecordingShell(machine.shell, recorder: recorder, redactor: redactor, step: name),
       files: RecordingFiles(machine.files, recorder: recorder, step: name),

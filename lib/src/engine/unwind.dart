@@ -4,6 +4,7 @@ import '../domain/recorder.dart';
 import '../domain/step.dart';
 import '../domain/step_context.dart';
 import '../model/names.dart';
+import '../model/run_event.dart';
 import 'recording_ports.dart';
 import 'redactor.dart';
 
@@ -28,7 +29,12 @@ import 'redactor.dart';
 /// started in nor the one the run was heading for, with no record of how far back it got.
 final class Unwind {
   /// Creates an unwind against [machine], reporting to [recorder].
-  const Unwind({required this.machine, required this.recorder, required this.redactor});
+  const Unwind({
+    required this.machine,
+    required this.recorder,
+    required this.redactor,
+    this.logLevel = LogLevel.info,
+  });
 
   /// What the steps acted on.
   final Machine machine;
@@ -38,6 +44,9 @@ final class Unwind {
 
   /// What is removed on the way into the record.
   final Redactor redactor;
+
+  /// The quietest level this run writes, carried from the runner.
+  final LogLevel logLevel;
 
   /// Undoes [applied] from the newest backwards.
   ///
@@ -94,7 +103,12 @@ final class Unwind {
         http: RecordingHttp(machine.http, recorder: recorder, redactor: redactor, step: name),
         clock: machine.clock,
         entropy: machine.entropy,
-        log: RecordingLogger(recorder: recorder, redactor: redactor, step: name),
+        log: RecordingLogger(
+          recorder: recorder,
+          redactor: redactor,
+          step: name,
+          threshold: logLevel,
+        ),
         step: name,
         arguments: arguments,
         answers: answers,

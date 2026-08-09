@@ -159,13 +159,13 @@ void main() {
   });
 
   group('the configuration file', () {
-    Future<PluginConfiguration> read(String yaml) {
+    Future<Configuration> read(String yaml) {
       final FakeFiles files = FakeFiles(<String, String>{'ansiwise.yaml': yaml});
-      return PluginConfiguration.load(files: files, path: 'ansiwise.yaml');
+      return Configuration.load(files: files, path: 'ansiwise.yaml');
     }
 
     test('reads the names in the order they are written', () async {
-      final PluginConfiguration configuration = await read('plugins:\n  - one\n  - other\n');
+      final Configuration configuration = await read('plugins:\n  - one\n  - other\n');
 
       expect(configuration.plugins, <String>['one', 'other']);
     });
@@ -220,6 +220,38 @@ void main() {
           ),
         ),
       );
+    });
+
+    group('the log level it carries', () {
+      // It stands here and not only on the command line, because handing this binary its
+      // configuration file has to be enough — for a run somebody starts by hand, and for the same
+      // program reached over the REST surface, which has no command line at all.
+
+      test('is info when the file does not say', () async {
+        expect((await read('plugins:\n  - one\n')).logLevel, LogLevel.info);
+      });
+
+      test('is any of the four the file names', () async {
+        for (final LogLevel level in LogLevel.values) {
+          expect((await read('log_level: ${level.name}\nplugins:\n  - one\n')).logLevel, level);
+        }
+      });
+
+      test('a word that is not one of them is refused, with all four named', () {
+        expect(
+          read('log_level: warning\nplugins:\n  - one\n'),
+          throwsA(
+            isA<PluginRejected>().having(
+              (PluginRejected refused) => refused.message,
+              'message',
+              allOf(contains('warning'), contains('debug'), contains('warn'), contains('error')),
+            ),
+          ),
+          reason:
+              'somebody who wrote a near-miss learns the word rather than that something was '
+              'wrong, which is the difference between one run and three',
+        );
+      });
     });
   });
 }

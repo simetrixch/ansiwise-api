@@ -29,7 +29,12 @@ import 'unwind.dart';
 /// argued with.
 final class Runner {
   /// Creates a runner against [machine], recording to [recorder].
-  const Runner({required this.machine, required this.recorder, required this.redactor});
+  const Runner({
+    required this.machine,
+    required this.recorder,
+    required this.redactor,
+    this.logLevel = LogLevel.info,
+  });
 
   /// What the program acts on.
   final Machine machine;
@@ -39,6 +44,13 @@ final class Runner {
 
   /// What is removed on the way into the record.
   final Redactor redactor;
+
+  /// The quietest level this run writes.
+  ///
+  /// Read from the installation's configuration, or from the command line where a run says otherwise.
+  /// It reaches every step and every unwind through here, so one run writes at one level and a
+  /// reader never has to work out which part of a record was filtered and which was not.
+  final LogLevel logLevel;
 
   /// Runs [program] in [mode] against the machine described by [header].
   ///
@@ -79,6 +91,7 @@ final class Runner {
           machine: machine,
           recorder: recorder,
           redactor: redactor,
+          logLevel: logLevel,
         ).undo(walk.applied, facts, answers);
       }
 
@@ -103,6 +116,7 @@ final class Runner {
       recorder: recorder,
       redactor: redactor,
       step: const StepName('when'),
+      threshold: logLevel,
     );
     return PredicateEvaluation(machine: machine, recorder: recorder, log: log).evaluate(program);
   }
@@ -117,6 +131,7 @@ final class Runner {
       machine: machine,
       recorder: recorder,
       redactor: redactor,
+      logLevel: logLevel,
     );
     final List<StepRecord> records = <StepRecord>[];
     final List<AppliedStep> applied = <AppliedStep>[];
