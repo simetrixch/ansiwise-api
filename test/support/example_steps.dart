@@ -138,3 +138,21 @@ final class Says implements Predicate {
   Future<PredicateResult> evaluate(PredicateContext context) async =>
       answer ? PredicateResult.holds(because) : PredicateResult.doesNotHold(because);
 }
+
+/// A step that only measures the machine and finds it as it should be.
+///
+/// There is nothing to take it back from, which is exactly what makes it worth having here: a
+/// question about what a run leaves behind must not answer "this step" for something that leaves
+/// nothing. Only its KIND says so — the class is neither reversible nor irreversible — so a reader
+/// asking merely "is it a ReversibleStep" gets the wrong answer about it.
+final class Measures extends ObservingStep {
+  const Measures(this.because);
+
+  final String because;
+
+  @override
+  Future<CheckResult> check(StepContext context) async => CheckResult.satisfied(because);
+
+  @override
+  Future<StepPlan> plan(StepContext context) async => StepPlan.nothing(because);
+}

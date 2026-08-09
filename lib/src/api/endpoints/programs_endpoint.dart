@@ -62,8 +62,11 @@ final class ProgramsEndpoint {
     // The step is built in order to ask it whether it can be undone. The registry holds a factory
     // and not an instance, so there is no other way to know — and this is the one thing the client
     // cannot derive for itself, because it is a property of the class rather than of the program
-    // file. It is also what lets a dry run name the point beyond which there is no going back.
-    final Step step = resolved.registered.create(resolved.entry.arguments);
+    // file.
+    //
+    // WITH ITS DEFAULTS, or a step reading an argument it declared a default for is refused as it is
+    // built and this endpoint answers with a failure instead of a description.
+    final Step step = resolved.registered.create(resolved.argumentsWithDefaults);
     return <String, Object?>{
       'step': resolved.entry.step.value,
       'source': resolved.registered.source,
@@ -71,7 +74,12 @@ final class ProgramsEndpoint {
       'when': <String>[
         for (final RegisteredPredicate predicate in resolved.when) predicate.name.value,
       ],
-      'reversible': step is ReversibleStep,
+      // What this RUN would be able to take back, which is not the same as what the step can do: a
+      // program row saying `undo: false` leaves a reversible step standing. A client showing the
+      // step's own capability where the program has switched it off would promise a way back that
+      // this run does not have.
+      'reversible': step is ReversibleStep && resolved.entry.undo,
+      'undo': resolved.entry.undo,
       if (step is IrreversibleStep) 'irreversible_reason': step.irreversibleReason,
       'arguments': <Object?>[
         for (final ArgumentSpec spec in resolved.registered.arguments)

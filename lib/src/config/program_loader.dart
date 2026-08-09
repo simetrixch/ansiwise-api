@@ -229,7 +229,7 @@ const Map<String, ArgumentKind> _answerKinds = <String, ArgumentKind>{
 };
 
 /// The keys of a step entry the loader reads. Every other key of an entry is an argument.
-const Set<String> _stepKeys = <String>{'step', 'on_failure', 'when'};
+const Set<String> _stepKeys = <String>{'step', 'on_failure', 'when', 'undo'};
 
 /// The whole vocabulary of `on_failure:`, as a program file writes it.
 const Map<String, OnFailure> _policies = <String, OnFailure>{
@@ -447,12 +447,42 @@ ProgramStep? _step(YamlNode node, int index, _Refusals refusals) {
   final String label = step == null ? 'steps[$index]' : 'steps[$index] $step';
   final OnFailure? onFailure = _onFailure(node, label, refusals);
   final List<PredicateName> when = _when(node, label, refusals);
+  final bool undo = _undo(node, label, refusals);
   final Arguments arguments = _arguments(node, label, refusals);
 
   if (step == null || onFailure == null) {
     return null;
   }
-  return ProgramStep(step: step, onFailure: onFailure, arguments: arguments, when: when);
+  return ProgramStep(
+    step: step,
+    onFailure: onFailure,
+    arguments: arguments,
+    when: when,
+    undo: undo,
+  );
+}
+
+/// Whether this entry may be taken back, which is true unless the file says otherwise.
+///
+/// The one key of an entry that HAS a default, and that is the opposite of how `on_failure` is
+/// treated on purpose. A failure policy nobody chose gets applied to the step nobody thought about,
+/// which is exactly the step whose policy turns out to be wrong — so it is required. Undo is the
+/// other way round: a step that can be taken back should be, and switching that off is a decision
+/// somebody makes about ONE installation. So the file says so where it is meant and stays quiet
+/// everywhere else, and a reader who sees the key knows somebody decided.
+bool _undo(YamlMap entry, String label, _Refusals refusals) {
+  final YamlNode? node = entry.nodes['undo'];
+  if (node == null) {
+    return true;
+  }
+  if (node.value case final bool written) {
+    return written;
+  }
+  refusals.add(
+    node.span.start.line,
+    '$label: "undo" is true or false, and the file gives ${_kindOf(node)}',
+  );
+  return true;
 }
 
 /// The registered step name an entry writes, or null when it is missing or malformed.

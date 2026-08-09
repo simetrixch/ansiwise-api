@@ -53,6 +53,7 @@ final class ProgramStep {
     required this.onFailure,
     this.arguments = Arguments.none,
     this.when = const <PredicateName>[],
+    this.undo = true,
   });
 
   /// The registered name of the step.
@@ -74,4 +75,20 @@ final class ProgramStep {
   /// few — and a program file that can express or is one expression away from being able to
   /// compute.
   final List<PredicateName> when;
+
+  /// Whether this entry may be taken back when a later step ends the run.
+  ///
+  /// **True by default, and the operator is who turns it off.** A step that CAN be undone is not
+  /// always a step that SHOULD be: taking a package manager's cache back onto a machine somebody has
+  /// since been working on, or restoring a configuration a person edited in the meantime, is a
+  /// correct undo doing damage. What is right there is a decision about one installation, so it is
+  /// made in the program file rather than in the step.
+  ///
+  /// **It never makes an irreversible step reversible.** It only takes an undo away. A step that
+  /// cannot be undone at all says so through its class, and no line in a program file changes that.
+  ///
+  /// **And it is said before the run, not afterwards.** A step whose undo is switched off is part of
+  /// what the run cannot take back, so it moves the point of no return exactly as an irreversible
+  /// step does — and an operator reads that boundary before deciding to start.
+  final bool undo;
 }

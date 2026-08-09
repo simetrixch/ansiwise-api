@@ -62,6 +62,21 @@ final class Unwind {
         continue;
       }
 
+      // The operator switched it off for this program. A step that CAN be undone is not always one
+      // that SHOULD be — putting a configuration back over one a person has edited since is a
+      // correct undo doing damage — and that judgement is about one installation, so it is made in
+      // the program file.
+      //
+      // It is said here AND it was said before the run started, because a step whose undo is off is
+      // part of what this run cannot take back. Learning that at the moment it is needed is learning
+      // it too late.
+      if (!entry.undo) {
+        log.warn(
+          'not taken back: this program says undo: false for this step, so what it did stands',
+        );
+        continue;
+      }
+
       log.info('taking back');
       try {
         await step.undo(_contextFor(entry.name, entry.arguments, facts, answers));
@@ -90,7 +105,12 @@ final class Unwind {
 /// A step whose apply ran, kept so it can be taken back.
 final class AppliedStep {
   /// Records that [step], registered as [name], was applied with [arguments].
-  const AppliedStep({required this.name, required this.step, required this.arguments});
+  const AppliedStep({
+    required this.name,
+    required this.step,
+    required this.arguments,
+    this.undo = true,
+  });
 
   /// The registered name, for the record.
   final StepName name;
@@ -100,4 +120,10 @@ final class AppliedStep {
 
   /// What it was given, so its undo sees the same values its apply did.
   final Arguments arguments;
+
+  /// Whether the program allows this entry to be taken back.
+  ///
+  /// Carried from the program rather than read off the step, because it is not a property of the
+  /// step at all: the same step is undone in one installation and left standing in another.
+  final bool undo;
 }

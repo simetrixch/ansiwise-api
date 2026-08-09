@@ -88,6 +88,7 @@ Program programOf(
   List<String> roles = const <String>['master'],
   Map<String, Arguments> arguments = const <String, Arguments>{},
   DeclaredAnswers answers = DeclaredAnswers.none,
+  Set<String> undoOff = const <String>{},
 }) => Program(
   name: ProgramName(name),
   answers: answers,
@@ -99,6 +100,7 @@ Program programOf(
         onFailure: entry.$2,
         arguments: arguments[entry.$1] ?? Arguments.none,
         when: entry.$3.map(PredicateName.new).toList(growable: false),
+        undo: !undoOff.contains(entry.$1),
       ),
   ],
 );

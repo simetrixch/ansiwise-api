@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 
+import 'arguments.dart';
 import 'program.dart';
 import 'registry.dart';
 
@@ -38,4 +39,21 @@ final class ResolvedStep {
 
   /// The registry entries the names behind its `when:` stand for, in the order written.
   final List<RegisteredPredicate> when;
+
+  /// What this step runs with: the values the file wrote, plus the ones its specification declares
+  /// by default.
+  ///
+  /// ANYTHING THAT BUILDS THE STEP MUST USE THIS. The registry holds a factory rather than an
+  /// instance, so asking a step anything at all — whether it can be taken back, what it would plan —
+  /// means building it, and a step that reads an argument it was given a default for is refused when
+  /// handed the file's values alone. The engine has always filled them in before building; anything
+  /// else that built a step was one defaulted argument away from throwing, and the reading endpoint
+  /// was exactly that.
+  Arguments get argumentsWithDefaults {
+    final Map<String, Object> defaults = <String, Object>{
+      for (final ArgumentSpec spec in registered.arguments)
+        if (spec.defaultValue case final Object value) spec.name: value,
+    };
+    return defaults.isEmpty ? entry.arguments : entry.arguments.withDefaults(defaults);
+  }
 }

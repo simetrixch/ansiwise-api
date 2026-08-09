@@ -58,6 +58,7 @@ export 'src/engine/recording_ports.dart';
 export 'src/engine/redactor.dart';
 export 'src/engine/runner.dart';
 export 'src/engine/step_execution.dart';
+export 'src/engine/point_of_no_return.dart';
 export 'src/engine/unwind.dart';
 export 'src/model/check_result.dart';
 export 'src/model/failures.dart';

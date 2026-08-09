@@ -283,8 +283,12 @@ final class StepExecution {
     );
   }
 
-  AppliedStep _applied(ResolvedStep resolved, Step step, StepContext context) =>
-      AppliedStep(name: resolved.entry.step, step: step, arguments: context.arguments);
+  AppliedStep _applied(ResolvedStep resolved, Step step, StepContext context) => AppliedStep(
+    name: resolved.entry.step,
+    step: step,
+    arguments: context.arguments,
+    undo: resolved.entry.undo,
+  );
 
   Verdict _verdictFor(OnFailure policy, String reason) => switch (policy) {
     OnFailure.die => Died(reason),
