@@ -180,6 +180,7 @@ void main() {
               start: clock.now(),
               end: clock.now(),
               verdict: const Succeeded(),
+              standing: StepStanding.proven,
               firstEvent: 0,
               lastEvent: 2,
             ),

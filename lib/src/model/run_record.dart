@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 
 import 'mode.dart';
 import 'names.dart';
+import 'standings.dart';
 import 'step_record.dart';
 
 /// What one run was and how it ended.
@@ -23,6 +24,7 @@ final class RunRecord {
     required this.commit,
     required this.fingerprint,
     this.resumes,
+    this.waived = const <Mode>[],
     this.end,
     this.exitCode,
     this.steps = const <StepRecord>[],
@@ -81,6 +83,15 @@ final class RunRecord {
   /// an operator reading the history sees two halves of one story with nothing joining them.
   final RunId? resumes;
 
+  /// The proofs this run went without, named by the mode that would have produced each.
+  ///
+  /// Empty on a run that was gated normally, which is every run of the installation this platform
+  /// was built for. An entry means an operator decided the gate did not apply to them, and it is
+  /// written into the header where the run begins rather than worked out afterwards from what is
+  /// missing — an absent proof and a waived one look identical from the outside, and only one of
+  /// them was somebody's decision.
+  final List<Mode> waived;
+
   /// When it ended, in UTC, or null while it is still running.
   final DateTime? end;
 
@@ -98,6 +109,19 @@ final class RunRecord {
 
   /// Whether the run finished and reported nothing.
   bool get clean => exitCode == 0 && issues.isEmpty;
+
+  /// How many of its rows were measured, how many were taken on trust, how many did not run.
+  ///
+  /// Counted from [steps] rather than stored, so it cannot fall out of step with the rows it counts.
+  Standings get standings => Standings.of(steps.map((StepRecord each) => each.standing));
+
+  /// Whether everything this run claims was measured, and nothing was waived.
+  ///
+  /// **The one question the whole record exists to answer honestly.** A single declared row, a
+  /// single skipped one, or a waived gate all make this false, and a green exit code does not make
+  /// it true — those are two different facts and a reader who conflated them would be told a run
+  /// proved something it did not.
+  bool get fullyProven => waived.isEmpty && standings.fullyProven;
 
   /// A copy of this record with the closing fields filled in.
   RunRecord closed({
@@ -117,6 +141,7 @@ final class RunRecord {
     commit: commit,
     fingerprint: fingerprint,
     resumes: resumes,
+    waived: waived,
     end: end,
     exitCode: exitCode,
     steps: steps,

@@ -74,6 +74,10 @@ final class RecordingLauncher implements RunLauncher {
   /// reason as the answers: a refusal that never reached the launcher proves nothing about what a
   /// run that WAS started was told.
   final List<RunId?> resumed = <RunId?>[];
+
+  /// The proofs each start was told the run goes without. Kept for the same reason as the rest: an
+  /// answer that MENTIONS a waiver proves nothing about what the run itself was told.
+  final List<List<Mode>> waivers = <List<Mode>>[];
   int next = 1;
 
   @override
@@ -82,10 +86,12 @@ final class RecordingLauncher implements RunLauncher {
     required Mode mode,
     Map<String, Object?> answers = const <String, Object?>{},
     RunId? resumes,
+    List<Mode> waived = const <Mode>[],
   }) async {
     started.add((program, mode));
     this.answers.add(answers);
     resumed.add(resumes);
+    waivers.add(waived);
     return RunId('run-${next++}');
   }
 }

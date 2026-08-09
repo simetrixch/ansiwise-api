@@ -5,8 +5,10 @@ import '../model/names.dart';
 import '../model/on_failure.dart';
 import '../model/run_event.dart';
 import '../model/run_record.dart';
+import '../model/standings.dart';
 import '../model/step_plan.dart';
 import '../model/step_record.dart';
+import '../model/step_standing.dart';
 import '../model/verdict.dart';
 
 /// Turns the record into JSON and reads it back.
@@ -40,6 +42,10 @@ final class RecordCodec implements RecordJson {
       'fingerprint': record.fingerprint,
       // Absent rather than null on a run that starts fresh, for the same reason `end` is.
       'resumes': ?record.resumes?.value,
+      // Always written, including the empty list. An absent key would read as an old record that
+      // predates waivers, and a reader cannot tell that from a run that waived nothing — which are
+      // opposite answers to the only question this field is asked.
+      'waived': <Object?>[for (final Mode mode in record.waived) mode.name],
       // Absent rather than null while the run is going. A header with no end is a run still
       // running, and that is the same fact whichever way it is written down.
       if (end != null) 'end': _written(end),
@@ -65,6 +71,9 @@ final class RecordCodec implements RecordJson {
       final String id => RunId(id),
       _ => null,
     },
+    waived: <Mode>[
+      for (final String name in _texts(json, 'waived')) _named(Mode.values, name, 'mode'),
+    ],
     end: _optionalInstant(json, 'end'),
     exitCode: _optionalNumber(json, 'exit_code'),
     steps: <StepRecord>[
@@ -167,12 +176,14 @@ final class RecordCodec implements RecordJson {
         step: _step(json),
         verdict: verdictFrom(_object(json, 'verdict')),
         elapsed: _span(json, 'elapsed_micros'),
+        standing: _named(StepStanding.values, _text(json, 'standing'), 'standing'),
       ),
       'run-finished' => RunFinished(
         sequence: sequence,
         at: at,
         exitCode: _number(json, 'exit_code'),
         issues: _texts(json, 'issues'),
+        standings: _standings(_object(json, 'standings')),
       ),
       _ => throw FormatException('there is no event kind called "$kind"'),
     };
@@ -187,6 +198,7 @@ final class RecordCodec implements RecordJson {
       'start': _written(record.start),
       'end': _written(record.end),
       'verdict': verdict(record.verdict),
+      'standing': record.standing.name,
       'first_event': record.firstEvent,
       'last_event': record.lastEvent,
       if (plan != null) 'plan': stepPlan(plan),
@@ -203,6 +215,7 @@ final class RecordCodec implements RecordJson {
       start: _instant(json, 'start'),
       end: _instant(json, 'end'),
       verdict: verdictFrom(_object(json, 'verdict')),
+      standing: _named(StepStanding.values, _text(json, 'standing'), 'standing'),
       firstEvent: _number(json, 'first_event'),
       lastEvent: _number(json, 'last_event'),
       plan: plan == null ? null : stepPlanFrom(plan),
@@ -330,8 +343,17 @@ final class RecordCodec implements RecordJson {
     final StepFinished e => <String, Object?>{
       'verdict': verdict(e.verdict),
       'elapsed_micros': e.elapsed.inMicroseconds,
+      'standing': e.standing.name,
     },
-    final RunFinished e => <String, Object?>{'exit_code': e.exitCode, 'issues': e.issues},
+    final RunFinished e => <String, Object?>{
+      'exit_code': e.exitCode,
+      'issues': e.issues,
+      'standings': <String, Object?>{
+        'proven': e.standings.proven,
+        'declared': e.standings.declared,
+        'skipped': e.standings.skipped,
+      },
+    },
   };
 }
 
@@ -403,6 +425,17 @@ DateTime? _optionalInstant(Map<String, Object?> json, String key) {
 /// Durations are written as whole microseconds, which is the resolution [Duration] holds. Anything
 /// with a decimal point in it would come back rounded.
 Duration _span(Map<String, Object?> json, String key) => Duration(microseconds: _number(json, key));
+
+/// The three numbers a run closes with, read back as they were written.
+///
+/// All three are required. A missing one read as zero would turn "nothing was skipped" and "this
+/// writer did not know about skipping" into the same answer, and the second is the one where the
+/// number on the screen is wrong.
+Standings _standings(Map<String, Object?> json) => Standings(
+  proven: _number(json, 'proven'),
+  declared: _number(json, 'declared'),
+  skipped: _number(json, 'skipped'),
+);
 
 List<String> _texts(Map<String, Object?> json, String key) {
   final Object? value = json[key];

@@ -20,6 +20,11 @@ abstract interface class RunLauncher {
   /// against the program's own declaration — the process that will act on a value is the one
   /// that has to be sure of it.
   ///
+  /// [waived] names the proofs this run is going without, and travels for the same reason [resumes]
+  /// does: it is known here, it is decided nowhere else, and the header the run writes has to carry
+  /// it. An absent proof and a waived one look identical from the outside, so a run that did not
+  /// carry the fact would leave a record nobody could tell apart from one that was gated normally.
+  ///
   /// [resumes] names the run this one continues, and it changes nothing about what is run.
   /// A resumed run walks the same program from the top; every step that already did its work
   /// answers that there is nothing to do, and a machine somebody touched in between is measured
@@ -30,5 +35,6 @@ abstract interface class RunLauncher {
     required Mode mode,
     Map<String, Object?> answers = const <String, Object?>{},
     RunId? resumes,
+    List<Mode> waived = const <Mode>[],
   });
 }

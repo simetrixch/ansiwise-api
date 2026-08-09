@@ -1,7 +1,9 @@
 import 'package:meta/meta.dart';
 
 import 'names.dart';
+import 'standings.dart';
 import 'step_plan.dart';
+import 'step_standing.dart';
 import 'verdict.dart';
 
 /// One thing that happened during a run.
@@ -314,6 +316,7 @@ final class StepFinished extends RunEvent {
     required StepName super.step,
     required this.verdict,
     required this.elapsed,
+    this.standing = StepStanding.proven,
   });
 
   /// How the step ended.
@@ -321,6 +324,12 @@ final class StepFinished extends RunEvent {
 
   /// How long it took.
   final Duration elapsed;
+
+  /// How much of this row was measured, as opposed to taken on trust.
+  ///
+  /// On the event as well as on the row, because a record is rebuilt from the events: a standing
+  /// only the record carried would be gone the moment somebody read a run back off disk.
+  final StepStanding standing;
 
   @override
   String get kind => 'step-finished';
@@ -335,10 +344,19 @@ final class RunFinished extends RunEvent {
     required super.at,
     required this.exitCode,
     required this.issues,
+    this.standings = const Standings(),
   }) : super(step: null);
 
   /// What the process returns to whatever started it.
   final int exitCode;
+
+  /// How many rows were measured, how many were taken on trust, and how many did not run.
+  ///
+  /// **The closing line is these three, not a bare success.** An exit code answers whether the run
+  /// failed and says nothing about how much of it anything looked at — a run that skipped half its
+  /// steps returns the same zero as one that measured every row. Carried on the event so that
+  /// somebody tailing a run reads the same three numbers as somebody opening its record afterwards.
+  final Standings standings;
 
   /// Every failure the run carried on past, repeated here so a run that finished with three
   /// problems says so rather than looking clean.

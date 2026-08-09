@@ -41,6 +41,7 @@ final class DetachedLauncher implements RunLauncher {
     required Mode mode,
     Map<String, Object?> answers = const <String, Object?>{},
     RunId? resumes,
+    List<Mode> waived = const <Mode>[],
   }) async {
     final RunId id = newRunId();
     final bool hasAnswers = answers.isNotEmpty;
@@ -68,6 +69,9 @@ final class DetachedLauncher implements RunLauncher {
         // In argv rather than over stdin, and it belongs there: a run identifier is not a secret,
         // and it is the one thing about this run that a process listing may as well say.
         if (resumes case final RunId earlier) ...<String>['--resume', earlier.value],
+        // Also argv, and for the same reason: which gate an installation waived is not a secret,
+        // and the run has to write it into its own header where a reader will look for it.
+        for (final Mode gate in waived) ...<String>['--waived', gate.flag],
         if (hasAnswers) ...<String>['--answers', '-'],
       ],
       workingDirectory: workingDirectory,

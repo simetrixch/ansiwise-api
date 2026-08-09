@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 
 import 'names.dart';
 import 'step_plan.dart';
+import 'step_standing.dart';
 import 'verdict.dart';
 
 /// What one step did, as one row in the run the operator reads.
@@ -18,6 +19,7 @@ final class StepRecord {
     required this.start,
     required this.end,
     required this.verdict,
+    required this.standing,
     required this.firstEvent,
     required this.lastEvent,
     this.plan,
@@ -41,6 +43,13 @@ final class StepRecord {
 
   /// How it ended.
   final Verdict verdict;
+
+  /// How much of this row was measured, as opposed to taken on trust.
+  ///
+  /// Separate from [verdict], and the separation is the point: a step can fail with its standing
+  /// [StepStanding.proven], because a failure the framework measured is a measurement. Reading one
+  /// off the other is what lets a run report a row nothing looked at as green.
+  final StepStanding standing;
 
   /// The sequence number of this step's first event.
   final int firstEvent;

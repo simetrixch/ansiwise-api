@@ -166,3 +166,24 @@ final class Measures extends ObservingStep {
   @override
   Future<StepPlan> plan(StepContext context) async => StepPlan.nothing(because);
 }
+
+/// A gate whose whole job is verifying an earlier step, asked before that step has run.
+///
+/// The one row in this framework that ends up declared. Its check cannot hold in a mode where
+/// nothing was applied — what it looks for is not there, through no fault of the machine — so the
+/// engine carries the run past it on the strength of what it says it WOULD check. Nothing measured
+/// that, and the record has to say so rather than count the row among the measured ones.
+final class VerifiesWhatRanBefore extends ObservingStep {
+  const VerifiesWhatRanBefore();
+
+  @override
+  bool get verifiesAnEarlierStep => true;
+
+  @override
+  Future<CheckResult> check(StepContext context) async =>
+      const CheckResult.blocked('the file the earlier step writes is not there');
+
+  @override
+  Future<StepPlan> plan(StepContext context) async =>
+      const StepPlan.nothing('would read back what the earlier step wrote');
+}

@@ -53,8 +53,9 @@ void main() {
       );
 
   ({DeploymentApi api, MemoryRunStore store, RecordingLauncher launcher}) build(
-    ResolvedProgram program,
-  ) {
+    ResolvedProgram program, {
+    bool requireDryRun = true,
+  }) {
     final MemoryRunStore store = MemoryRunStore();
     final RecordingLauncher launcher = RecordingLauncher();
     final FixedCatalogue catalogue = FixedCatalogue(<ResolvedProgram>[program]);
@@ -65,7 +66,7 @@ void main() {
           store: store,
           launcher: launcher,
           catalogue: catalogue,
-          gate: Gate(store),
+          gate: Gate(store, requireDryRun: requireDryRun),
           json: const PlainRecordJson(),
           commit: commit,
         ),
@@ -196,6 +197,121 @@ void main() {
       );
       expect(answer, isA<Answered>());
       expect(it.launcher.started.single.$2, Mode.dry);
+    });
+  });
+
+  group('an installation that waived the gate', () {
+    // WAIVING IS NOT FALSIFYING. An operator who knows what they are doing had no way past the gate
+    // except to make the framework's guarantee meaningless everywhere, so it can be turned off — and
+    // everything about the run then has to say that it was.
+
+    test('starts a real run with no dry run behind it at all', () async {
+      final ({DeploymentApi api, MemoryRunStore store, RecordingLauncher launcher}) it = build(
+        deployCluster(),
+        requireDryRun: false,
+      );
+
+      final ApiResponse answer = await it.api.call(
+        post('/runs', <String, Object?>{'program': 'deploy-cluster', 'mode': 'run'}),
+      );
+
+      expect(answer, isA<Answered>());
+      expect(it.store.runs, isEmpty, reason: 'there was no dry run, waived or otherwise');
+      expect(it.launcher.started.single.$2, Mode.run);
+    });
+
+    test('says so in the answer, rather than going quiet', () async {
+      // The trap this closes: with the gate waived there is no `admitted_by`, and an absent
+      // `admitted_by` is also what a test or a dry run answers — so silence would read as "this
+      // mode needed no proof" to the one operator who most needs to know it went without one.
+      final ({DeploymentApi api, MemoryRunStore store, RecordingLauncher launcher}) it = build(
+        deployCluster(),
+        requireDryRun: false,
+      );
+
+      final ApiResponse answer = await it.api.call(
+        post('/runs', <String, Object?>{'program': 'deploy-cluster', 'mode': 'run'}),
+      );
+
+      final Map<String, Object?> body = switch ((answer as Answered).payload) {
+        final Map<String, Object?> payload => payload,
+        final Object other => throw StateError('answered with $other'),
+      };
+      expect(body['waived'], <String>['dry']);
+      expect(
+        body.containsKey('admitted_by'),
+        isFalse,
+        reason: 'nothing admitted it, and naming a dry run here would be the lie',
+      );
+    });
+
+    test('tells the run itself, so its record carries the waiver', () async {
+      // The answer is read by whoever started the run; the record is read by everybody afterwards.
+      // A waiver that reached only the first would leave a record nobody could tell apart from one
+      // that was gated normally.
+      final ({DeploymentApi api, MemoryRunStore store, RecordingLauncher launcher}) it = build(
+        deployCluster(),
+        requireDryRun: false,
+      );
+
+      await it.api.call(
+        post('/runs', <String, Object?>{'program': 'deploy-cluster', 'mode': 'run'}),
+      );
+
+      expect(it.launcher.waivers.single, <Mode>[Mode.dry]);
+    });
+
+    test('a waived gate does not go looking for a dry run to name', () async {
+      // A clean dry run of exactly this input is sitting in the store. The waived gate must not
+      // reach for it: the operator decided to go without a proof, and reporting one they did not
+      // ask for would put a measurement behind a run that has none.
+      final ResolvedProgram program = deployCluster();
+      final ({DeploymentApi api, MemoryRunStore store, RecordingLauncher launcher}) it = build(
+        program,
+        requireDryRun: false,
+      );
+      it.store.runs.add(
+        runRecord(
+          id: 'the-dry-one',
+          program: 'deploy-cluster',
+          mode: Mode.dry,
+          fingerprint: fingerprintOf(program: program, commit: commit),
+          exitCode: 0,
+        ),
+      );
+
+      final ApiResponse answer = await it.api.call(
+        post('/runs', <String, Object?>{'program': 'deploy-cluster', 'mode': 'run'}),
+      );
+
+      final Map<String, Object?> body = switch ((answer as Answered).payload) {
+        final Map<String, Object?> payload => payload,
+        final Object other => throw StateError('answered with $other'),
+      };
+      expect(body.containsKey('admitted_by'), isFalse);
+      expect(body['waived'], <String>['dry']);
+    });
+
+    test('the two modes nothing precedes waive nothing', () async {
+      // They were never gated, so there is no proof for them to have gone without. Reporting one
+      // would be the same defect from the other side: a run claiming to have skipped something
+      // nobody ever asked it for.
+      final ({DeploymentApi api, MemoryRunStore store, RecordingLauncher launcher}) it = build(
+        deployCluster(),
+        requireDryRun: false,
+      );
+
+      for (final String mode in <String>['test', 'dry']) {
+        final ApiResponse answer = await it.api.call(
+          post('/runs', <String, Object?>{'program': 'deploy-cluster', 'mode': mode}),
+        );
+        final Map<String, Object?> body = switch ((answer as Answered).payload) {
+          final Map<String, Object?> payload => payload,
+          final Object other => throw StateError('answered with $other'),
+        };
+        expect(body.containsKey('waived'), isFalse, reason: 'a $mode run waived nothing');
+      }
+      expect(it.launcher.waivers, everyElement(isEmpty));
     });
   });
 

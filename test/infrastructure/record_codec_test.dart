@@ -294,6 +294,7 @@ void main() {
             start: at,
             end: at.add(const Duration(seconds: 30)),
             verdict: const Failed('no certificate', policy: OnFailure.continueRun),
+            standing: StepStanding.proven,
             firstEvent: 3,
             lastEvent: 11,
             plan: const DiffPlan('/etc/thing.yaml', before: '', after: 'a: 1'),
@@ -324,6 +325,64 @@ void main() {
       expect(row.issues, <String>['no certificate']);
     });
 
+    test('what a run went without survives being written down', () {
+      // A waiver that did not round-trip would be gone from every record read back off disk, and
+      // what is left then reads exactly like a run that was gated normally. Written even when the
+      // list is empty, so an absent key cannot be mistaken for "this run waived nothing".
+      final RunRecord waived = RunRecord(
+        id: const RunId('20260807T123015Z-2'),
+        program: const ProgramName('deploy-cluster'),
+        mode: Mode.run,
+        argv: const <String>['ansiwise', 'deploy-cluster', '--mode', 'run'],
+        start: at,
+        stage: const Stage('prod'),
+        role: const Role('master'),
+        fqdn: const Fqdn('m1.example.com'),
+        commit: 'abc1234',
+        fingerprint: 'a-digest',
+        waived: const <Mode>[Mode.dry],
+      );
+
+      final RunRecord back = codec.runFrom(asObject(jsonDecode(jsonEncode(codec.run(waived)))));
+
+      expect(back.waived, <Mode>[Mode.dry]);
+      expect(
+        back.fullyProven,
+        isFalse,
+        reason: 'a run with no proof behind it never reports as one',
+      );
+      expect(codec.runFrom(codec.run(open())).waived, isEmpty);
+    });
+
+    test('how much of each row was measured survives being written down', () {
+      // The standing is what the three numbers are counted from. Lost in the codec, every run read
+      // back off disk would count as fully measured — the one answer that must never be wrong by
+      // default.
+      final RunRecord closed = open().closed(
+        end: at,
+        exitCode: 0,
+        steps: <StepRecord>[
+          for (final StepStanding standing in StepStanding.values)
+            StepRecord(
+              step: step,
+              source: 'x:1',
+              start: at,
+              end: at,
+              verdict: const Succeeded(),
+              standing: standing,
+              firstEvent: 0,
+              lastEvent: 1,
+            ),
+        ],
+        issues: const <String>[],
+      );
+
+      final RunRecord back = codec.runFrom(asObject(jsonDecode(jsonEncode(codec.run(closed)))));
+
+      expect(back.steps.map((StepRecord each) => each.standing), StepStanding.values);
+      expect(back.standings, const Standings(proven: 1, declared: 1, skipped: 1));
+    });
+
     test('a step with no plan reads back with no plan', () {
       final RunRecord closed = open().closed(
         end: at,
@@ -335,6 +394,7 @@ void main() {
             start: at,
             end: at,
             verdict: const Succeeded(),
+            standing: StepStanding.proven,
             firstEvent: 0,
             lastEvent: 1,
           ),

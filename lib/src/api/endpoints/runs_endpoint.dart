@@ -148,6 +148,12 @@ final class RunsEndpoint {
         program: program.declared.name,
         fingerprint: fingerprint,
       );
+      // What this run is going without. Read from the gate rather than inferred from `satisfiedBy`
+      // being null, because null is also the answer for the two modes nothing precedes — and those
+      // waived nothing. Inferring it would report every test and every dry run as having waived a
+      // proof it was never asked for.
+      final List<Mode> waived = <Mode>[if (mode == Mode.run && !gate.requireDryRun) Mode.dry];
+
       // What the operator supplied travels ON, not the validated copy: the run checks it again
       // against the program's own declaration, and the process that will ACT on a value is the
       // one that has to be sure of it. The check above is what stops a run that cannot succeed
@@ -157,6 +163,7 @@ final class RunsEndpoint {
         mode: mode,
         answers: answers,
         resumes: resumes,
+        waived: waived,
       );
       return Answered(<String, Object?>{
         'run': id.value,
@@ -167,6 +174,10 @@ final class RunsEndpoint {
         // Which dry run let this one through, so the operator can see they are acting on the one
         // they just read rather than on some older green run they have forgotten about.
         if (satisfiedBy != null) 'admitted_by': satisfiedBy.id.value,
+        // And where none did because this installation waived the gate, the answer says THAT. A
+        // silent absence of `admitted_by` reads the same as a mode that needed no proof, so the
+        // operator starting a real run without one would never learn they had.
+        if (waived.isNotEmpty) 'waived': <Object?>[for (final Mode gate in waived) gate.name],
       }, status: 202);
     } on GateNotMet catch (refusal) {
       return Refused.notYet(refusal.message);

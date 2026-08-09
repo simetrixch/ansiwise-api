@@ -14,6 +14,7 @@ import '../model/on_failure.dart';
 import '../model/run_event.dart';
 import '../model/step_plan.dart';
 import '../model/step_record.dart';
+import '../model/step_standing.dart';
 import '../model/verdict.dart';
 import 'planning_ports.dart';
 import 'recording_ports.dart';
@@ -74,6 +75,9 @@ final class StepExecution {
       return _finish(
         resolved: resolved,
         verdict: Skipped(blocking.value),
+        // Nothing ran, so there is nothing here anything could have measured. It is counted apart
+        // from the measured rows and never added to them.
+        standing: StepStanding.skipped,
         start: start,
         firstEvent: firstEvent,
       );
@@ -106,6 +110,9 @@ final class StepExecution {
       return _finish(
         resolved: resolved,
         verdict: _verdictFor(resolved.entry.onFailure, failure.toString()),
+        // A failure the framework watched happen is a measurement. What is proven here is not that
+        // the step worked — the verdict says it did not — but that the row says what was seen.
+        standing: StepStanding.proven,
         start: start,
         firstEvent: firstEvent,
       );
@@ -137,6 +144,11 @@ final class StepExecution {
           return _finish(
             resolved: resolved,
             verdict: const Succeeded(),
+            // THE ROW THIS STATE EXISTS FOR. The step's own check could not hold, so its plan is
+            // what it says it would do rather than what anything confirmed, and the verdict beside
+            // it is the framework letting the run continue rather than the framework agreeing. Both
+            // read as success and neither was measured.
+            standing: StepStanding.declared,
             start: start,
             firstEvent: firstEvent,
             plan: mode == Mode.dry ? plan : null,
@@ -145,6 +157,8 @@ final class StepExecution {
         return _finish(
           resolved: resolved,
           verdict: _verdictFor(resolved.entry.onFailure, reason),
+          // The check answered, and what it answered was that a precondition does not hold.
+          standing: StepStanding.proven,
           start: start,
           firstEvent: firstEvent,
         );
@@ -157,6 +171,9 @@ final class StepExecution {
         return _finish(
           resolved: resolved,
           verdict: const Succeeded(),
+          // The check read the machine and found it already in the state this step produces. That
+          // is a measurement, and it is the one idempotence rests on.
+          standing: StepStanding.proven,
           start: start,
           firstEvent: firstEvent,
           plan: mode == Mode.dry ? StepPlan.nothing(because) : null,
@@ -189,6 +206,8 @@ final class StepExecution {
         return _finish(
           resolved: resolved,
           verdict: const Succeeded(),
+          // The step's own check answered on this machine. That is everything a test claims.
+          standing: StepStanding.proven,
           start: start,
           firstEvent: firstEvent,
         );
@@ -199,6 +218,10 @@ final class StepExecution {
         return _finish(
           resolved: resolved,
           verdict: const Succeeded(),
+          // The framework asked while the precondition held, with the planning ports around every
+          // way out of this step — so whatever it reached for on the way to this answer was refused
+          // rather than carried out. That is what makes the plan a measurement and not a claim.
+          standing: StepStanding.proven,
           start: start,
           firstEvent: firstEvent,
           plan: plan,
@@ -222,6 +245,9 @@ final class StepExecution {
           return _finish(
             resolved: resolved,
             verdict: _verdictFor(resolved.entry.onFailure, why),
+            // The postcondition was read after the apply and did not hold. Measured, and the answer
+            // was no.
+            standing: StepStanding.proven,
             start: start,
             firstEvent: firstEvent,
             applied: _applied(resolved, step, context, captured),
@@ -230,6 +256,9 @@ final class StepExecution {
         return _finish(
           resolved: resolved,
           verdict: const Succeeded(),
+          // The postcondition was read after the apply and holds. This is the only thing in the
+          // framework that turns "the step returned without throwing" into "the step worked".
+          standing: StepStanding.proven,
           start: start,
           firstEvent: firstEvent,
           applied: _applied(resolved, step, context, captured),
@@ -317,9 +346,15 @@ final class StepExecution {
   /// not a second class of failure.
   Verdict _verdictFor(OnFailure policy, String reason) => Failed(reason, policy: policy);
 
+  /// Closes one row.
+  ///
+  /// [standing] has no default, and that is deliberate. Every branch above states how much it
+  /// measured, so a branch added later cannot inherit a claim nobody made for it — and "proven"
+  /// inherited by accident is the exact shape of a run claiming more than it has.
   StepOutcome _finish({
     required ResolvedStep resolved,
     required Verdict verdict,
+    required StepStanding standing,
     required DateTime start,
     required int firstEvent,
     StepPlan? plan,
@@ -334,6 +369,7 @@ final class StepExecution {
         step: resolved.entry.step,
         verdict: verdict,
         elapsed: end.difference(start),
+        standing: standing,
       ),
     );
 
@@ -344,6 +380,7 @@ final class StepExecution {
         start: start,
         end: end,
         verdict: verdict,
+        standing: standing,
         firstEvent: firstEvent,
         lastEvent: lastEvent,
         plan: plan,

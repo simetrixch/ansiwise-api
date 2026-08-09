@@ -97,12 +97,27 @@ final class Runner {
 
       final int exitCode = walk.ended ? 1 : (walk.issues.isEmpty ? 0 : 2);
       final DateTime end = machine.clock.now();
+      final RunRecord closed = header.closed(
+        end: end,
+        exitCode: exitCode,
+        steps: walk.records,
+        issues: walk.issues,
+      );
+      // The closing line carries the three numbers beside the exit code, because the exit code
+      // answers a different question. A run that skipped half its steps returns the same zero as one
+      // that measured every row, and only these three tell the two apart. Read off the record that
+      // is about to be returned, so the event and the record cannot state different numbers.
       recorder.record(
-        (int sequence, DateTime at) =>
-            RunFinished(sequence: sequence, at: at, exitCode: exitCode, issues: walk.issues),
+        (int sequence, DateTime at) => RunFinished(
+          sequence: sequence,
+          at: at,
+          exitCode: exitCode,
+          issues: walk.issues,
+          standings: closed.standings,
+        ),
       );
 
-      return header.closed(end: end, exitCode: exitCode, steps: walk.records, issues: walk.issues);
+      return closed;
     } finally {
       // Closed even when a step threw something this engine does not catch. A run that crashed
       // without leaving its record is a run nobody can find out anything about, which is the one

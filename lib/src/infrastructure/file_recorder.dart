@@ -179,12 +179,14 @@ RunEvent _redacted(RunEvent event, Redactor redactor) {
       step: _stepOf(e),
       verdict: _redactedVerdict(e.verdict, redactor),
       elapsed: e.elapsed,
+      standing: e.standing,
     ),
     final RunFinished e => RunFinished(
       sequence: e.sequence,
       at: e.at,
       exitCode: e.exitCode,
       issues: redactor.hideAll(e.issues),
+      standings: e.standings,
     ),
   };
 }
@@ -206,6 +208,11 @@ RunRecord _redactedRecord(RunRecord record, Redactor redactor) {
     fqdn: record.fqdn,
     commit: record.commit,
     fingerprint: record.fingerprint,
+    // Neither carries anything a redactor could hide, and both were being dropped: a redacted
+    // record forgot which run it continued and forgot that a proof had been waived. The second is
+    // the one that mattered — a lost waiver reads as a run that was gated normally.
+    resumes: record.resumes,
+    waived: record.waived,
     end: record.end,
     exitCode: record.exitCode,
     steps: <StepRecord>[for (final StepRecord step in record.steps) _redactedStep(step, redactor)],
@@ -221,6 +228,7 @@ StepRecord _redactedStep(StepRecord step, Redactor redactor) {
     start: step.start,
     end: step.end,
     verdict: _redactedVerdict(step.verdict, redactor),
+    standing: step.standing,
     firstEvent: step.firstEvent,
     lastEvent: step.lastEvent,
     plan: plan == null ? null : _redactedPlan(plan, redactor),

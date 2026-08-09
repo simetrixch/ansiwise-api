@@ -253,6 +253,64 @@ void main() {
         );
       });
     });
+
+    group('the gate it leaves standing', () {
+      // A real run needs a clean dry run of the same input behind it. That can be turned off, and
+      // the ONE way to end up without it is to have typed the word — an installation that never
+      // thought about the question keeps the gate.
+
+      test('stands where the file says nothing at all', () async {
+        expect((await read('plugins:\n  - one\n')).requireDryRun, isTrue);
+      });
+
+      test('stands where a gate block says nothing about it', () async {
+        // A `gate:` block naming something else must not read as a decision about this one.
+        expect(
+          (await read('gate:\n  something_else: false\nplugins:\n  - one\n')).requireDryRun,
+          isTrue,
+        );
+      });
+
+      test('stands where it is written true', () async {
+        expect((await read('gate:\n  dry: true\nplugins:\n  - one\n')).requireDryRun, isTrue);
+      });
+
+      test('comes down only where somebody wrote false', () async {
+        expect((await read('gate:\n  dry: false\nplugins:\n  - one\n')).requireDryRun, isFalse);
+      });
+
+      test('a value that is neither is refused, saying what false would mean', () {
+        // Not coerced. "no" and "off" are what somebody reaches for, and quietly reading either as
+        // false would take the gate away on a typo — the one setting where a wrong guess costs a
+        // machine.
+        expect(
+          read('gate:\n  dry: no\nplugins:\n  - one\n'),
+          throwsA(
+            isA<PluginRejected>().having(
+              (PluginRejected refused) => refused.message,
+              'message',
+              allOf(contains('gate.dry'), contains('true or false'), contains('clean dry run')),
+            ),
+          ),
+        );
+      });
+
+      test('a gate that is not a mapping is refused rather than read past', () {
+        expect(
+          read('gate: false\nplugins:\n  - one\n'),
+          throwsA(
+            isA<PluginRejected>().having(
+              (PluginRejected refused) => refused.message,
+              'message',
+              contains('"gate" has to be a mapping'),
+            ),
+          ),
+          reason:
+              'somebody meant to turn something off, and a key read past in silence leaves them '
+              'believing they did',
+        );
+      });
+    });
   });
 }
 
