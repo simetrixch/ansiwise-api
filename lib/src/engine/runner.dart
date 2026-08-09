@@ -3,7 +3,7 @@ import '../domain/machine.dart';
 import '../domain/recorder.dart';
 import '../domain/resolved_program.dart';
 import '../domain/step_context.dart';
-import '../domain/step_log.dart';
+import '../domain/logger.dart';
 import '../model/failures.dart';
 import '../model/mode.dart';
 import '../model/names.dart';
@@ -99,7 +99,7 @@ final class Runner {
   }
 
   Future<Facts> _measure(ResolvedProgram program) {
-    final StepLog log = RecordingLog(
+    final Logger log = RecordingLogger(
       recorder: recorder,
       redactor: redactor,
       step: const StepName('when'),

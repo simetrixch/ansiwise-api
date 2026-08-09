@@ -129,9 +129,9 @@ final class FileRecorder implements Recorder {
 
 /// Returns [event] with the values that reach a recorder unredacted taken out.
 ///
-/// Where the boundary runs. `RecordingShell`, `RecordingHttp` and `RecordingLog` in
+/// Where the boundary runs. `RecordingShell`, `RecordingHttp` and `RecordingLogger` in
 /// `lib/src/engine/recording_ports.dart` redact what they carry as they build the event: a command's
-/// argv, every line of its output, a request's address, the text of a note. Those fields are left
+/// argv, every line of its output, a request's address, the text of a log line. Those are left
 /// alone here rather than passed through a second time.
 ///
 /// What no port touches is everything the ENGINE puts into an event without having carried it: the
@@ -151,7 +151,7 @@ RunEvent _redacted(RunEvent event, Redactor redactor) {
     Output() ||
     CommandFinished() ||
     RequestSent() ||
-    Note() => event,
+    Log() => event,
     final PredicateEvaluated e => PredicateEvaluated(
       sequence: e.sequence,
       at: e.at,

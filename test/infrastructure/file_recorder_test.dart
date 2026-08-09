@@ -59,11 +59,11 @@ void main() {
       );
       recorder.record(
         (int s, DateTime at) =>
-            Note(sequence: s, at: at, step: step, level: NoteLevel.info, message: 'first'),
+            Log(sequence: s, at: at, step: step, level: LogLevel.info, message: 'first'),
       );
       recorder.record(
         (int s, DateTime at) =>
-            Note(sequence: s, at: at, step: step, level: NoteLevel.info, message: 'second'),
+            Log(sequence: s, at: at, step: step, level: LogLevel.info, message: 'second'),
       );
       expect(recorder.nextSequence, 3);
       await recorder.close();
@@ -78,7 +78,7 @@ void main() {
       final FileRecorder recorder = await open();
       recorder.record(
         (int s, DateTime at) =>
-            Note(sequence: s, at: at, step: step, level: NoteLevel.info, message: 'written'),
+            Log(sequence: s, at: at, step: step, level: LogLevel.info, message: 'written'),
       );
 
       // Read without closing the recorder: nothing of ours is holding the line back.
@@ -94,7 +94,7 @@ void main() {
       expect(
         () => recorder.record(
           (int s, DateTime at) =>
-              Note(sequence: s, at: at, step: step, level: NoteLevel.info, message: 'too late'),
+              Log(sequence: s, at: at, step: step, level: LogLevel.info, message: 'too late'),
         ),
         throwsStateError,
       );
@@ -233,7 +233,7 @@ void main() {
       await recorder.save(header());
       recorder.record(
         (int s, DateTime at) =>
-            Note(sequence: s, at: at, step: step, level: NoteLevel.info, message: 'x'),
+            Log(sequence: s, at: at, step: step, level: LogLevel.info, message: 'x'),
       );
       await recorder.close();
 

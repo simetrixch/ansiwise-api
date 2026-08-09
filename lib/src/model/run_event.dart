@@ -251,13 +251,33 @@ final class Planned extends RunEvent {
   String get kind => 'planned';
 }
 
-/// How much weight a note carries.
-enum NoteLevel {
+/// How much weight a log line carries.
+///
+/// THE FOUR EVERY SYSTEM HAS, and that is the whole reason they are these four. Somebody who has
+/// seen one of them knows the other three exist; a set invented here would have to be learned, and
+/// the learning would happen while somebody is reading a record to find out what went wrong.
+///
+/// **Ordered from quietest to loudest**, because a run is configured by naming the quietest level it
+/// writes. The order is the mechanism and not a presentation detail.
+enum LogLevel {
+  /// Detail that matters while something is being worked out, and not otherwise.
+  debug,
+
   /// Something the operator may want to know.
   info,
 
-  /// Something that is not right but does not stop the step.
-  warning,
+  /// Something that is not right and did not stop the step.
+  warn,
+
+  /// Something that went wrong.
+  ///
+  /// Whether the run goes on is the program's `on_failure` for that step and is not decided here. A
+  /// failure the run walked past is exactly the one a reader needs to find afterwards, so it is
+  /// written at this level either way.
+  error;
+
+  /// Whether a run writing at [threshold] and louder writes this line.
+  bool passes(LogLevel threshold) => index >= threshold.index;
 }
 
 /// A step said something in its own words. See [RunEvent].
@@ -265,9 +285,9 @@ enum NoteLevel {
 /// For what a command's own output cannot say: which of several branches a step took, what it
 /// found when it looked, why it decided there was nothing to do.
 @immutable
-final class Note extends RunEvent {
+final class Log extends RunEvent {
   /// Records [message] at [level].
-  const Note({
+  const Log({
     required super.sequence,
     required super.at,
     required StepName super.step,
@@ -275,14 +295,14 @@ final class Note extends RunEvent {
     required this.message,
   });
 
-  /// How much weight the note carries.
-  final NoteLevel level;
+  /// How much weight the line carries.
+  final LogLevel level;
 
-  /// The note itself, with secrets already redacted.
+  /// The line itself, with secrets already redacted.
   final String message;
 
   @override
-  String get kind => 'note';
+  String get kind => 'log';
 }
 
 /// A step ended. See [RunEvent].

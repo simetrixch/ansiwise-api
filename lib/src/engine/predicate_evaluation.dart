@@ -4,7 +4,7 @@ import '../domain/recorder.dart';
 import '../domain/registry.dart';
 import '../domain/resolved_program.dart';
 import '../domain/step_context.dart';
-import '../domain/step_log.dart';
+import '../domain/logger.dart';
 import '../model/names.dart';
 import '../model/run_event.dart';
 import 'planning_ports.dart';
@@ -29,8 +29,8 @@ final class PredicateEvaluation {
   /// Where the answers go.
   final Recorder recorder;
 
-  /// Where a condition's own notes go.
-  final StepLog log;
+  /// Where a condition's own log lines go.
+  final Logger log;
 
   /// Measures every condition [program] uses and returns the answers.
   Future<Facts> evaluate(ResolvedProgram program) async {

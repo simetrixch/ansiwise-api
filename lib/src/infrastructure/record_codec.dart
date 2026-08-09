@@ -153,11 +153,11 @@ final class RecordCodec implements RecordJson {
         step: _step(json),
         plan: stepPlanFrom(_object(json, 'plan')),
       ),
-      'note' => Note(
+      'log' => Log(
         sequence: sequence,
         at: at,
         step: _step(json),
-        level: _named(NoteLevel.values, _text(json, 'level'), 'note level'),
+        level: _named(LogLevel.values, _text(json, 'level'), 'log level'),
         message: _text(json, 'message'),
       ),
       'step-finished' => StepFinished(
@@ -326,7 +326,7 @@ final class RecordCodec implements RecordJson {
     },
     final RequestSent e => <String, Object?>{'method': e.method, 'url': e.url, 'status': e.status},
     final Planned e => <String, Object?>{'plan': stepPlan(e.plan)},
-    final Note e => <String, Object?>{'level': e.level.name, 'message': e.message},
+    final Log e => <String, Object?>{'level': e.level.name, 'message': e.message},
     final StepFinished e => <String, Object?>{
       'verdict': verdict(e.verdict),
       'elapsed_micros': e.elapsed.inMicroseconds,

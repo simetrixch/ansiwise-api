@@ -75,15 +75,15 @@ void main() {
       );
     });
 
-    test('a note a step writes is redacted too', () async {
+    test('a log line a step writes is redacted too', () async {
       final Harness h = Harness(secrets: <String>['s3cret-value-here']);
-      RecordingLog(
+      RecordingLogger(
         recorder: h.recorder,
         redactor: h.redactor,
         step: const StepName('reads'),
       ).info('using s3cret-value-here to authenticate');
 
-      expect(h.recorder.notes.single, 'using [redacted] to authenticate');
+      expect(h.recorder.logLines.single, 'using [redacted] to authenticate');
     });
 
     test('a command is recorded unjoined, so a value can never become syntax', () async {

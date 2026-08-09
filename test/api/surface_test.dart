@@ -174,11 +174,11 @@ void main() {
       );
       it.store.eventsById['r1'] = <RunEvent>[
         for (int i = 0; i < 5; i++)
-          Note(
+          Log(
             sequence: i,
             at: DateTime.utc(2026, 8, 7),
             step: const StepName('writes_a_file'),
-            level: NoteLevel.info,
+            level: LogLevel.info,
             message: 'line $i',
           ),
       ];

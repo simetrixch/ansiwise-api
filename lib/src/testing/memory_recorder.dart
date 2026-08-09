@@ -43,6 +43,6 @@ final class MemoryRecorder implements Recorder {
   /// Everything a command wrote, in order, whatever step it belonged to.
   List<String> get output => only<Output>().map((Output e) => e.text).toList(growable: false);
 
-  /// Every note, in order.
-  List<String> get notes => only<Note>().map((Note e) => e.message).toList(growable: false);
+  /// Every log line, in order.
+  List<String> get logLines => only<Log>().map((Log e) => e.message).toList(growable: false);
 }

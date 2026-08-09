@@ -35,7 +35,7 @@ export 'src/domain/run_store.dart';
 export 'src/domain/shell.dart';
 export 'src/domain/step.dart';
 export 'src/domain/step_context.dart';
-export 'src/domain/step_log.dart';
+export 'src/domain/logger.dart';
 export 'src/infrastructure/channel_http_server.dart';
 export 'src/infrastructure/channel_socket.dart';
 export 'src/infrastructure/detached_launcher.dart';

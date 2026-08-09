@@ -49,7 +49,7 @@ void main() {
     await h.runner.run(program: fileProgram(), mode: Mode.run, header: h.header());
 
     expect(
-      h.recorder.notes,
+      h.recorder.logLines,
       contains('nothing to do: /etc/thing already holds what this step writes'),
     );
   });

@@ -247,7 +247,7 @@ final class StepExecution {
     Facts facts,
     Arguments answers,
   ) {
-    final RecordingLog log = RecordingLog(recorder: recorder, redactor: redactor, step: name);
+    final RecordingLogger log = RecordingLogger(recorder: recorder, redactor: redactor, step: name);
     final Machine recording = Machine(
       shell: RecordingShell(machine.shell, recorder: recorder, redactor: redactor, step: name),
       files: RecordingFiles(machine.files, recorder: recorder, step: name),

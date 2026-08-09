@@ -141,18 +141,18 @@ void main() {
       expect(back.status, 204);
     });
 
-    test('note, at either level', () {
-      final Note back = reread<Note>(
-        Note(sequence: 10, at: at, step: step, level: NoteLevel.warning, message: 'two of three'),
+    test('a log line, at every level', () {
+      final Log back = reread<Log>(
+        Log(sequence: 10, at: at, step: step, level: LogLevel.warn, message: 'two of three'),
       );
-      expect(back.level, NoteLevel.warning);
+      expect(back.level, LogLevel.warn);
       expect(back.message, 'two of three');
 
       expect(
-        reread<Note>(
-          Note(sequence: 11, at: at, step: step, level: NoteLevel.info, message: 'here'),
+        reread<Log>(
+          Log(sequence: 11, at: at, step: step, level: LogLevel.info, message: 'here'),
         ).level,
-        NoteLevel.info,
+        LogLevel.info,
       );
     });
 

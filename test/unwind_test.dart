@@ -111,7 +111,7 @@ void main() {
     await h.runner.run(program: program, mode: Mode.run, header: h.header());
 
     expect(
-      h.recorder.notes,
+      h.recorder.logLines,
       contains('not taken back: the command it runs does not come with a way back'),
     );
   });

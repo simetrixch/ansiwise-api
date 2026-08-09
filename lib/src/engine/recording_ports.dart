@@ -14,7 +14,7 @@ import '../domain/files.dart';
 import '../domain/http.dart';
 import '../domain/recorder.dart';
 import '../domain/shell.dart';
-import '../domain/step_log.dart';
+import '../domain/logger.dart';
 import '../model/names.dart';
 import '../model/run_event.dart';
 import 'redactor.dart';
@@ -136,11 +136,11 @@ final class RecordingFiles implements Files {
     await inner.delete(path);
     if (existed) {
       recorder.record(
-        (int sequence, DateTime at) => Note(
+        (int sequence, DateTime at) => Log(
           sequence: sequence,
           at: at,
           step: step,
-          level: NoteLevel.info,
+          level: LogLevel.info,
           message: 'deleted $path',
         ),
       );
@@ -153,11 +153,11 @@ final class RecordingFiles implements Files {
     await inner.createDirectory(path, mode: mode);
     if (!existed) {
       recorder.record(
-        (int sequence, DateTime at) => Note(
+        (int sequence, DateTime at) => Log(
           sequence: sequence,
           at: at,
           step: step,
-          level: NoteLevel.info,
+          level: LogLevel.info,
           message: 'created directory $path',
         ),
       );
@@ -205,28 +205,54 @@ final class RecordingHttp implements Http {
 }
 
 /// What a step says in its own words, on its way to the record.
-final class RecordingLog implements StepLog {
-  /// Sends every note to [recorder], attributed to [step].
-  const RecordingLog({required this.recorder, required this.redactor, required this.step});
+///
+/// **The level decides what is WRITTEN, never what a step is allowed to say.** Every step logs at
+/// every level, always; [threshold] is what a reader configured for this run, and a line below it is
+/// dropped here rather than never produced. That difference matters: a step that decided for itself
+/// what was worth saying would be a step whose author guessed, months earlier, what somebody would
+/// need at three in the morning.
+final class RecordingLogger implements Logger {
+  /// Sends every line at or above [threshold] to [recorder], attributed to [step].
+  const RecordingLogger({
+    required this.recorder,
+    required this.redactor,
+    required this.step,
+    this.threshold = LogLevel.info,
+  });
 
   /// Where the events go.
   final Recorder recorder;
 
-  /// What is removed before the note is recorded.
+  /// What is removed before a line is recorded.
   final Redactor redactor;
 
-  /// The step the notes belong to.
+  /// The step the lines belong to.
   final StepName step;
 
-  @override
-  void info(String message) => _note(NoteLevel.info, message);
+  /// The quietest level this run writes.
+  ///
+  /// `info` unless a run says otherwise, so a normal run carries what an operator reads and a run
+  /// somebody is debugging carries what they need by being asked for it.
+  final LogLevel threshold;
 
   @override
-  void warn(String message) => _note(NoteLevel.warning, message);
+  void debug(String message) => _log(LogLevel.debug, message);
 
-  void _note(NoteLevel level, String message) {
+  @override
+  void info(String message) => _log(LogLevel.info, message);
+
+  @override
+  void warn(String message) => _log(LogLevel.warn, message);
+
+  @override
+  void error(String message) => _log(LogLevel.error, message);
+
+  void _log(LogLevel level, String message) {
+    if (!level.passes(threshold)) {
+      return;
+    }
     recorder.record(
-      (int sequence, DateTime at) => Note(
+      (int sequence, DateTime at) => Log(
         sequence: sequence,
         at: at,
         step: step,

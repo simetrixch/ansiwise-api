@@ -7,7 +7,7 @@ import 'entropy.dart';
 import 'files.dart';
 import 'http.dart';
 import 'shell.dart';
-import 'step_log.dart';
+import 'logger.dart';
 
 /// Everything a predicate is given in order to answer.
 ///
@@ -37,7 +37,7 @@ base class PredicateContext {
   final Clock clock;
 
   /// Saying something in the record.
-  final StepLog log;
+  final Logger log;
 }
 
 /// Everything a step is given in order to do its work.

@@ -48,7 +48,7 @@ final class Unwind {
   Future<void> undo(List<AppliedStep> applied, Facts facts, Arguments answers) async {
     for (final AppliedStep entry in applied.reversed) {
       final Step step = entry.step;
-      final RecordingLog log = RecordingLog(
+      final RecordingLogger log = RecordingLogger(
         recorder: recorder,
         redactor: redactor,
         step: entry.name,
@@ -94,7 +94,7 @@ final class Unwind {
         http: RecordingHttp(machine.http, recorder: recorder, redactor: redactor, step: name),
         clock: machine.clock,
         entropy: machine.entropy,
-        log: RecordingLog(recorder: recorder, redactor: redactor, step: name),
+        log: RecordingLogger(recorder: recorder, redactor: redactor, step: name),
         step: name,
         arguments: arguments,
         answers: answers,

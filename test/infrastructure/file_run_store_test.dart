@@ -238,7 +238,7 @@ void main() {
       for (int i = 0; i < 4; i++) {
         recorder.record(
           (int s, DateTime at) =>
-              Note(sequence: s, at: at, step: step, level: NoteLevel.info, message: 'note $i'),
+              Log(sequence: s, at: at, step: step, level: LogLevel.info, message: 'line $i'),
         );
       }
       recorder.record(
@@ -266,7 +266,7 @@ void main() {
       final List<RunEvent> events = await store.events(const RunId('run-done'), from: 3).toList();
 
       expect(events.map((RunEvent e) => e.sequence), <int>[3, 4, 5]);
-      expect((events.first as Note).message, 'note 2');
+      expect((events.first as Log).message, 'line 2');
     });
 
     test('a run whose events file is empty ends at once', () async {
@@ -280,7 +280,7 @@ void main() {
       const RecordCodec codec = RecordCodec();
       final String half = jsonEncode(
         codec.event(
-          Note(sequence: 6, at: noon, step: step, level: NoteLevel.info, message: 'never finished'),
+          Log(sequence: 6, at: noon, step: step, level: LogLevel.info, message: 'never finished'),
         ),
       ).substring(0, 20);
       await File(
@@ -327,7 +327,7 @@ void main() {
 
       recorder.record(
         (int s, DateTime at) =>
-            Note(sequence: s, at: at, step: step, level: NoteLevel.info, message: 'halfway'),
+            Log(sequence: s, at: at, step: step, level: LogLevel.info, message: 'halfway'),
       );
       await waitUntil(() => seen.length == 2);
       expect(ended.isCompleted, isFalse, reason: 'the run is still going');
@@ -367,7 +367,7 @@ void main() {
       const RecordCodec codec = RecordCodec();
       final String line = jsonEncode(
         codec.event(
-          Note(sequence: 1, at: noon, step: step, level: NoteLevel.info, message: 'arrives later'),
+          Log(sequence: 1, at: noon, step: step, level: LogLevel.info, message: 'arrives later'),
         ),
       );
       final File events = File(directory.events(id));
@@ -386,7 +386,7 @@ void main() {
 
       await events.writeAsString('\n', mode: FileMode.append, flush: true);
       await waitUntil(() => seen.length == 2);
-      expect((seen.last as Note).message, 'arrives later');
+      expect((seen.last as Log).message, 'arrives later');
 
       await watching.cancel();
     });
@@ -403,7 +403,7 @@ void main() {
       await recorder.save(begun);
       recorder.record(
         (int s, DateTime at) =>
-            Note(sequence: s, at: at, step: step, level: NoteLevel.info, message: 'only this'),
+            Log(sequence: s, at: at, step: step, level: LogLevel.info, message: 'only this'),
       );
       await recorder.close();
       await recorder.save(
