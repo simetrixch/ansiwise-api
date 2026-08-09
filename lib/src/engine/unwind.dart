@@ -1,0 +1,103 @@
+import '../domain/arguments.dart';
+import '../domain/machine.dart';
+import '../domain/recorder.dart';
+import '../domain/step.dart';
+import '../domain/step_context.dart';
+import '../model/names.dart';
+import 'recording_ports.dart';
+import 'redactor.dart';
+
+/// Takes back what a failed run had already done, in reverse.
+///
+/// A machine cannot be rolled back. There is no transaction around installing a package, and
+/// pretending otherwise is how a system claims a guarantee it cannot keep. What is achievable is
+/// compensation: each step that can be taken back says how, and when a later step ends the run the
+/// ones already applied are undone from the newest backwards.
+///
+/// Two rules make this safe rather than merely well-meant:
+///
+/// - **Only steps whose apply actually ran are undone.** A skipped step, a step that had nothing to
+///   do, and a step that was only planned all changed nothing. Undoing one of those would be a
+///   mutation nobody asked for, performed while cleaning up after a failure — the worst moment for
+///   a surprise.
+/// - **A step that cannot be taken back is passed over and said so.** It declared that in its own
+///   class, and the dry run already told the operator where that point was.
+///
+/// An undo that itself fails does not stop the rest. The remaining steps are still undone, and every
+/// failure is recorded — the alternative leaves the machine in a state that is neither the one it
+/// started in nor the one the run was heading for, with no record of how far back it got.
+final class Unwind {
+  /// Creates an unwind against [machine], reporting to [recorder].
+  const Unwind({required this.machine, required this.recorder, required this.redactor});
+
+  /// What the steps acted on.
+  final Machine machine;
+
+  /// Where the events go.
+  final Recorder recorder;
+
+  /// What is removed on the way into the record.
+  final Redactor redactor;
+
+  /// Undoes [applied] from the newest backwards.
+  ///
+  /// The list is in the order the steps ran; this walks it in reverse. [answers] is the same bag the
+  /// run was started with, because a step that read an answer to decide what it wrote reads the same
+  /// answer to decide what to take back — an undo given an empty bag would fail on the one path
+  /// where failing is least affordable.
+  Future<void> undo(List<AppliedStep> applied, Facts facts, Arguments answers) async {
+    for (final AppliedStep entry in applied.reversed) {
+      final Step step = entry.step;
+      final RecordingLog log = RecordingLog(
+        recorder: recorder,
+        redactor: redactor,
+        step: entry.name,
+      );
+
+      if (step is! ReversibleStep) {
+        final String reason = step is IrreversibleStep
+            ? step.irreversibleReason
+            : 'the step does not say how it could be taken back';
+        log.warn('not taken back: $reason');
+        continue;
+      }
+
+      log.info('taking back');
+      try {
+        await step.undo(_contextFor(entry.name, entry.arguments, facts, answers));
+        log.info('taken back');
+      } on Exception catch (failure) {
+        log.warn('could not be taken back: $failure');
+      }
+    }
+  }
+
+  StepContext _contextFor(StepName name, Arguments arguments, Facts facts, Arguments answers) =>
+      StepContext(
+        shell: RecordingShell(machine.shell, recorder: recorder, redactor: redactor, step: name),
+        files: RecordingFiles(machine.files, recorder: recorder, step: name),
+        http: RecordingHttp(machine.http, recorder: recorder, redactor: redactor, step: name),
+        clock: machine.clock,
+        entropy: machine.entropy,
+        log: RecordingLog(recorder: recorder, redactor: redactor, step: name),
+        step: name,
+        arguments: arguments,
+        answers: answers,
+        facts: facts,
+      );
+}
+
+/// A step whose apply ran, kept so it can be taken back.
+final class AppliedStep {
+  /// Records that [step], registered as [name], was applied with [arguments].
+  const AppliedStep({required this.name, required this.step, required this.arguments});
+
+  /// The registered name, for the record.
+  final StepName name;
+
+  /// The instance that ran.
+  final Step step;
+
+  /// What it was given, so its undo sees the same values its apply did.
+  final Arguments arguments;
+}

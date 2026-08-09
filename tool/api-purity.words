@@ -1,0 +1,33 @@
+# What this framework may not name, anywhere under lib/, test/, bin/ and programs/.
+#
+# One word per line. A blank line and a line beginning with # are ignored, and everything else is
+# matched case-insensitively and word-anchored: `snapshotOfState` is a captured state and not an
+# occurrence of `snap`.
+#
+# THE LIST LIVES HERE, UNDER tool/, AND NOT BESIDE THE CHECK THAT READS IT. api-purity scans test/
+# to the byte, so a list written into test/checks/api_purity_test.dart would itself be an occurrence
+# of every word on it and the check could never pass. tool/ is the harness: the gate's own programs,
+# none of it compiled into the framework or shipped with it, which is why the check may name what it
+# forbids here. That tool/ stays out of the scan is asserted by a counter-probe of its own.
+#
+# The first six are the components of the platform this framework was cut out of; the rest are the
+# words that platform uses for the things it deploys. Such knowledge does not arrive as a
+# dependency, where a reviewer would meet it in the pubspec — it arrives one word at a time, in a
+# doc comment that explains a port by the tool the author had in mind and in a test fixture that
+# runs a real command because a real command was handy. Both read as illustration on the day they
+# are written and as specification a year later.
+microk8s
+vault
+argocd
+cloudflare
+helm
+snap
+digita
+tenant
+consumer
+zot
+tekton
+kubectl
+netplan
+hetzner
+authentik
