@@ -205,6 +205,12 @@ final class StepExecution {
         );
 
       case Mode.run:
+        // BEFORE apply, and that is the whole of it. A step that read the machine afterwards would
+        // be reading a machine it had already changed, and an undo built on that is a guess rather
+        // than a restoration.
+        final Object? captured = step is ReversibleStep<Object?>
+            ? await step.capture(context)
+            : null;
         await step.apply(context);
         final CheckResult after = await step.check(context);
         if (after is! Satisfied) {
@@ -218,7 +224,7 @@ final class StepExecution {
             verdict: _verdictFor(resolved.entry.onFailure, why),
             start: start,
             firstEvent: firstEvent,
-            applied: _applied(resolved, step, context),
+            applied: _applied(resolved, step, context, captured),
           );
         }
         return _finish(
@@ -226,7 +232,7 @@ final class StepExecution {
           verdict: const Succeeded(),
           start: start,
           firstEvent: firstEvent,
-          applied: _applied(resolved, step, context),
+          applied: _applied(resolved, step, context, captured),
         );
     }
   }
@@ -296,12 +302,14 @@ final class StepExecution {
     );
   }
 
-  AppliedStep _applied(ResolvedStep resolved, Step step, StepContext context) => AppliedStep(
-    name: resolved.entry.step,
-    step: step,
-    arguments: context.arguments,
-    undo: resolved.entry.undo,
-  );
+  AppliedStep _applied(ResolvedStep resolved, Step step, StepContext context, Object? captured) =>
+      AppliedStep(
+        name: resolved.entry.step,
+        step: step,
+        arguments: context.arguments,
+        captured: captured,
+        undo: resolved.entry.undo,
+      );
 
   /// The verdict of a step that failed under [policy].
   ///

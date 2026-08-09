@@ -58,4 +58,17 @@ base mixin FileStep on Step {
   Future<void> apply(StepContext context) async {
     await context.files.write(pathFor(context), await contentFor(context), mode: mode);
   }
+
+  /// What the file held before this step wrote it, or null when it was not there.
+  ///
+  /// The whole of what a reversible file step needs in order to put the machine back: the text goes
+  /// back, and null means the file was not there so the undo deletes it. It is here rather than
+  /// written out in every such step because each would write the same three lines, and the one that
+  /// got them subtly wrong would be the one whose undo mattered.
+  ///
+  /// It reads and changes nothing, so it is safe in every mode.
+  Future<String?> contentBefore(StepContext context) async {
+    final String path = pathFor(context);
+    return await context.files.exists(path) ? context.files.read(path) : null;
+  }
 }

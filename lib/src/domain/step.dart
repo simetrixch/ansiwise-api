@@ -53,15 +53,37 @@ abstract base class Step {
 ///
 /// The engine unwinds in reverse when a later step ends the run, calling [undo] on each reversible
 /// step it had already applied, and recording what it undid.
-abstract base class ReversibleStep extends Step {
+///
+/// **Saying it can be taken back obliges it to keep what it overwrites.** That is not an extra
+/// property beside the claim, it IS the claim, and the compiler holds it: [capture] cannot be left
+/// out, and [undo] is handed what it returned rather than being free to go and look.
+///
+/// WHY LOOKING AGAIN IS NOT ENOUGH, and this is the whole of it. An undo that re-measures the
+/// machine measures a machine that has changed since — by this step, by the steps after it, and by
+/// whatever was going on outside the run. One step in this platform removed the packages it found
+/// installed at undo time, believing they were the ones it had installed; a machine that already
+/// carried one of them had it taken away while the run was cleaning up after an unrelated failure.
+/// The author had written the correct rule in a comment directly above the code that did not hold
+/// it.
+abstract base class ReversibleStep<T> extends Step {
   /// Creates a step that can be taken back.
   const ReversibleStep() : super._();
 
-  /// Returns the machine to the state it was in before [Step.apply] ran.
+  /// What this step is about to change, read BEFORE [Step.apply] runs.
+  ///
+  /// Whatever [undo] needs in order to put the machine back, and nothing else. A step that CREATES
+  /// something absent captures the fact that it was absent; a step that CHANGES something captures
+  /// what was there.
+  ///
+  /// It runs before apply and must not change anything itself — the ports refuse a mutation in the
+  /// two modes that change nothing, and this is called in all three.
+  Future<T> capture(StepContext context);
+
+  /// Returns the machine to the state [captured] describes.
   ///
   /// Must tolerate being called after a partial apply: the step it is undoing may have failed
   /// halfway, and that is exactly when it matters.
-  Future<void> undo(StepContext context);
+  Future<void> undo(StepContext context, T captured);
 }
 
 /// A step that only measures the machine, and refuses the run when what it measures is not so.

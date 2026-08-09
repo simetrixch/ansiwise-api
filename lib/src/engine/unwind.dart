@@ -88,7 +88,7 @@ final class Unwind {
 
       log.info('taking back');
       try {
-        await step.undo(_contextFor(entry.name, entry.arguments, facts, answers));
+        await step.undo(_contextFor(entry.name, entry.arguments, facts, answers), entry.captured);
         log.info('taken back');
       } on Exception catch (failure) {
         log.warn('could not be taken back: $failure');
@@ -123,6 +123,7 @@ final class AppliedStep {
     required this.name,
     required this.step,
     required this.arguments,
+    required this.captured,
     this.undo = true,
   });
 
@@ -134,6 +135,13 @@ final class AppliedStep {
 
   /// What it was given, so its undo sees the same values its apply did.
   final Arguments arguments;
+
+  /// What the step read before it changed anything, handed back to its undo.
+  ///
+  /// Null for a step that is not reversible, which is the only case where nothing was read. For
+  /// every other step this is what makes the undo a restoration rather than a second guess at a
+  /// machine that has changed since.
+  final Object? captured;
 
   /// Whether the program allows this entry to be taken back.
   ///
