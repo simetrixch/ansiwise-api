@@ -26,7 +26,11 @@ dependencies:
   ansiwise_api:
     path: ..
   path: ^1.9.1
+  # A DEPENDENCY rather than a dev dependency, because audits.dart imports it: the suite that drives
+  # each audit and plants its counter-probe lives here, so that whoever runs it does not carry a copy
+  # of it. This package is itself only ever a dev dependency, so nothing ships with a test framework
+  # behind it.
+  test: ^1.31.2
 
 dev_dependencies:
-  test: ^1.31.2
   lints: ^6.1.0

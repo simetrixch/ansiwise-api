@@ -190,6 +190,66 @@ void main() {
     });
   });
 
+  group('a list is a list, and not the text it prints as', () {
+    /// A step taking a list of text, so two runs can differ only in where one entry ends.
+    Registry listing() => registryOf(
+      steps: <String, (String, Step Function(Arguments))>{
+        'writes_a_file': (
+          'x:1',
+          (Arguments a) => WritesAFile(path: a.textList('commands').join('|'), content: ''),
+        ),
+      },
+      arguments: <String, List<ArgumentSpec>>{
+        'writes_a_file': const <ArgumentSpec>[
+          ArgumentSpec(
+            name: 'commands',
+            kind: ArgumentKind.textList,
+            describes: 'the commands a gate demands',
+          ),
+        ],
+      },
+    );
+
+    String forList(List<String> commands) => fingerprintOf(
+      program: ProgramResolver(listing()).resolve(
+        Program(
+          name: const ProgramName('p'),
+          roles: <Role>[const Role('master')],
+          steps: <ProgramStep>[
+            ProgramStep(
+              step: const StepName('writes_a_file'),
+              onFailure: OnFailure.exit,
+              arguments: Arguments(<String, Object>{'commands': commands}),
+            ),
+          ],
+        ),
+      ),
+      commit: 'abc',
+      answers: Arguments.none,
+    );
+
+    test('two entries and one entry holding the separator are different inputs', () {
+      // Written through toString both are the text `[first, second]`: a gate demanding two commands
+      // and a gate demanding one tool whose name contains a comma. Two different runs, one hash,
+      // and the second is admitted on the first's dry run.
+      expect(forList(<String>['first', 'second']), isNot(forList(<String>['first, second'])));
+    });
+
+    test('one empty entry and no entry at all are different inputs', () {
+      expect(forList(<String>['']), isNot(forList(<String>[])));
+    });
+
+    test('the same list twice is one input', () {
+      expect(forList(<String>['first', 'second']), forList(<String>['first', 'second']));
+    });
+
+    test('the order of the entries is part of the input', () {
+      // A list is ordered on purpose: the words a command is started with, the value files a render
+      // layers. Two orders are two runs.
+      expect(forList(<String>['first', 'second']), isNot(forList(<String>['second', 'first'])));
+    });
+  });
+
   group('what stays out of it', () {
     test('the commit is in, because the same program at another commit is other steps', () {
       expect(fingerprintFor(commit: 'abc'), isNot(fingerprintFor(commit: 'def')));

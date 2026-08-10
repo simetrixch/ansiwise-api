@@ -104,12 +104,23 @@ PlantedAnswers answersFrom(Set<String> names, List<ArgumentSpec> declared) {
 /// registry reaches for would be a value planted for nobody, and a step that reads one it never
 /// declared throws where the audit can report it.
 ///
+/// A REGISTRY WHOSE STEPS READ NO ANSWER OPENS NO INSTALLATION TREE. There is no name to look up, so
+/// the declarations cannot change the answer, and demanding a foreign checkout to read them anyway
+/// made a package unable to run its own checks over a question it never asks. The two answers are
+/// identical — [answersFrom] over an empty set of names plants nothing whatever it is given.
+///
 /// [files] and [directory] are what a counter-probe replaces; left alone they are the real reader
 /// over the installation beside this checkout, which is what every package's checks want.
 Future<PlantedAnswers> answersDeclaredBy(
   Registry registry, {
   Files files = const RealFiles(),
   String? directory,
-}) async => answersFrom(<String>{
-  for (final RegisteredStep entry in registry.steps.values) ...entry.answers,
-}, await answerSpecsIn(files, directory ?? installationProgramsRoot));
+}) async {
+  final Set<String> read = <String>{
+    for (final RegisteredStep entry in registry.steps.values) ...entry.answers,
+  };
+  if (read.isEmpty) {
+    return const PlantedAnswers(values: Arguments.none, notDeclared: <String>[]);
+  }
+  return answersFrom(read, await answerSpecsIn(files, directory ?? installationProgramsRoot));
+}

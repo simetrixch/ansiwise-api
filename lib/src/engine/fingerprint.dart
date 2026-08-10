@@ -88,9 +88,24 @@ void _field(StringBuffer material, String name, String value) {
 /// **Absence is a different FIELD, not a reserved value.** An answer nobody gave and an answer given
 /// as nothing lead a step to do different things, so the two must not hash alike - and any marker
 /// written in the value's place would be a value some run could legitimately hold.
+///
+/// **A LIST is written entry by entry, and never as one string.** `['a', 'b'].toString()` and
+/// `['a, b'].toString()` are both `[a, b]`, so a list written through `toString` hashes two different
+/// runs alike: a gate demanding two commands, and a gate demanding one command whose name happens to
+/// contain a comma. The length in front of a field guards the boundary between FIELDS; this is the
+/// boundary between ENTRIES, and it needs its own.
 void _valued(StringBuffer material, String name, Object? value) {
   if (value == null) {
     _field(material, '$name.absent', '');
+    return;
+  }
+  if (value case final List<Object?> entries) {
+    // The count goes in as well. Without it a list holding one empty entry and a list holding none
+    // would write the same nothing, and they are different values.
+    _field(material, '$name.count', entries.length.toString());
+    for (int at = 0; at < entries.length; at += 1) {
+      _valued(material, '$name.$at', entries[at]);
+    }
     return;
   }
   _field(material, name, value.toString());

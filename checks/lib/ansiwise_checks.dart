@@ -4,10 +4,12 @@
 /// never exits. That is what lets a counter-probe drive the same audit over a tree it planted, and
 /// what keeps a check from being a shell script with Dart syntax.
 ///
-/// **What is here and what stays with the plugin.** Here: what decides. With the plugin: the wiring
-/// that points an audit at that plugin's own registry and tree, the fixtures that say how each of
-/// its steps meets a fake machine, and every counter-probe — because a counter-probe plants a defect
-/// in a particular tree.
+/// **What is here, what is in `audits.dart`, and what stays with the plugin.** Here: what decides.
+/// In `audits.dart` beside it: the SUITE that drives each of these over what a package points it at,
+/// states how much it covered, and plants the defect that proves it can go red. With the plugin: one
+/// short file per audit saying which audit it runs and against what, the fixtures that say how each
+/// of its steps meets a fake machine, its ledger of steps a fake machine cannot exercise, and its
+/// word list.
 ///
 /// **Why it is a package beside the framework rather than part of it.** An audit walks files, so it
 /// needs `dart:io`, and the framework's exec-confinement rule forbids that outside
@@ -38,3 +40,4 @@ export 'src/registry_reading.dart';
 export 'src/reversibility.dart';
 export 'src/source_tree.dart';
 export 'src/step_under_probe.dart';
+export 'src/word_purity.dart';
