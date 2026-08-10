@@ -112,7 +112,7 @@ final class StepExecution {
         verdict: _verdictFor(resolved.entry.onFailure, failure.toString()),
         // A failure the framework watched happen is a measurement. What is proven here is not that
         // the step worked — the verdict says it did not — but that the row says what was seen.
-        standing: StepStanding.proven,
+        standing: _measured(step),
         start: start,
         firstEvent: firstEvent,
       );
@@ -158,7 +158,7 @@ final class StepExecution {
           resolved: resolved,
           verdict: _verdictFor(resolved.entry.onFailure, reason),
           // The check answered, and what it answered was that a precondition does not hold.
-          standing: StepStanding.proven,
+          standing: _measured(step),
           start: start,
           firstEvent: firstEvent,
         );
@@ -173,7 +173,7 @@ final class StepExecution {
           verdict: const Succeeded(),
           // The check read the machine and found it already in the state this step produces. That
           // is a measurement, and it is the one idempotence rests on.
-          standing: StepStanding.proven,
+          standing: _measured(step),
           start: start,
           firstEvent: firstEvent,
           plan: mode == Mode.dry ? StepPlan.nothing(because) : null,
@@ -207,7 +207,7 @@ final class StepExecution {
           resolved: resolved,
           verdict: const Succeeded(),
           // The step's own check answered on this machine. That is everything a test claims.
-          standing: StepStanding.proven,
+          standing: _measured(step),
           start: start,
           firstEvent: firstEvent,
         );
@@ -221,7 +221,7 @@ final class StepExecution {
           // The framework asked while the precondition held, with the planning ports around every
           // way out of this step — so whatever it reached for on the way to this answer was refused
           // rather than carried out. That is what makes the plan a measurement and not a claim.
-          standing: StepStanding.proven,
+          standing: _measured(step),
           start: start,
           firstEvent: firstEvent,
           plan: plan,
@@ -234,7 +234,26 @@ final class StepExecution {
         final Object? captured = step is ReversibleStep<Object?>
             ? await step.capture(context)
             : null;
-        await step.apply(context);
+
+        try {
+          await step.apply(context);
+        } on Exception catch (failure) {
+          // CAUGHT HERE AND NOT AT THE TOP, and the difference is the whole of the undo contract.
+          // An apply that throws is the partial apply a step's undo exists for — it changed
+          // something and then stopped — and the capture taken above is exactly what putting that
+          // back needs. Letting the throw reach the outer catch loses it: that one answers without
+          // an applied step, so the unwind never reaches this step at all, and what it changed
+          // before it threw stands while its kind still tells the operator it can be taken back.
+          return _finish(
+            resolved: resolved,
+            verdict: _verdictFor(resolved.entry.onFailure, failure.toString()),
+            standing: _measured(step),
+            start: start,
+            firstEvent: firstEvent,
+            applied: _applied(resolved, step, context, captured),
+          );
+        }
+
         final CheckResult after = await step.check(context);
         if (after is! Satisfied) {
           final String why = switch (after) {
@@ -247,7 +266,7 @@ final class StepExecution {
             verdict: _verdictFor(resolved.entry.onFailure, why),
             // The postcondition was read after the apply and did not hold. Measured, and the answer
             // was no.
-            standing: StepStanding.proven,
+            standing: _measured(step),
             start: start,
             firstEvent: firstEvent,
             applied: _applied(resolved, step, context, captured),
@@ -258,13 +277,23 @@ final class StepExecution {
           verdict: const Succeeded(),
           // The postcondition was read after the apply and holds. This is the only thing in the
           // framework that turns "the step returned without throwing" into "the step worked".
-          standing: StepStanding.proven,
+          standing: _measured(step),
           start: start,
           firstEvent: firstEvent,
           applied: _applied(resolved, step, context, captured),
         );
     }
   }
+
+  /// What a branch that measured through [step] may claim.
+  ///
+  /// A step that answers on trust cannot yield a proven row, whichever way its check, its plan or
+  /// its verdict came out: everything measured here was measured through something only the program
+  /// row vouches for, and a measurement over an unverified instrument is the row's claim, not the
+  /// framework's. The two branches that never measured — a skipped row and the verifying gate —
+  /// state their own standing and do not come through here.
+  StepStanding _measured(Step step) =>
+      step.answersOnTrust ? StepStanding.declared : StepStanding.proven;
 
   PredicateName? _blockedBy(ResolvedStep resolved, Facts facts) {
     for (final RegisteredPredicate predicate in resolved.when) {

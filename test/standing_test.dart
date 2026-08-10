@@ -20,14 +20,26 @@ void main() {
     steps: <String, (String, Step Function(Arguments))>{
       'measures': ('x:1', (Arguments a) => const Measures('the machine is as it should be')),
       'verifies': ('x:2', (Arguments a) => const VerifiesWhatRanBefore()),
+      'waits': ('x:3', (Arguments a) => WaitsOnTheRowsWord(command: a.text('command'))),
     },
     predicates: <String, Predicate>{
       'never': const Says(answer: false, because: 'this machine is not that kind'),
     },
+    arguments: <String, List<ArgumentSpec>>{
+      'waits': const <ArgumentSpec>[
+        ArgumentSpec(
+          name: 'command',
+          kind: ArgumentKind.text,
+          describes: 'what is run each time this looks',
+        ),
+      ],
+    },
   );
 
-  ResolvedProgram resolve(List<(String, OnFailure, List<String>)> entries) =>
-      ProgramResolver(registry()).resolve(programOf('p', entries));
+  ResolvedProgram resolve(
+    List<(String, OnFailure, List<String>)> entries, {
+    Map<String, Arguments> arguments = const <String, Arguments>{},
+  }) => ProgramResolver(registry()).resolve(programOf('p', entries, arguments: arguments));
 
   group('a row the framework measured', () {
     test('is proven', () async {
@@ -89,6 +101,56 @@ void main() {
         reason: 'a green run holding one row nothing looked at is not a proven run',
       );
     });
+  });
+
+  group('a row whose command the row itself supplies', () {
+    /// The wait's row, carrying the command the way a program file would.
+    final Map<String, Arguments> rowCommand = <String, Arguments>{
+      'waits': const Arguments(<String, Object>{'command': 'asks-the-machine'}),
+    };
+
+    test('is declared while an ordinary row beside it stays proven', () async {
+      // The framework did not choose what this wait runs, so it cannot verify the row's claim that
+      // the command only looks — and a run holding such a row must say it rests on trust.
+      final Harness h = Harness();
+      final RunRecord record = await h.runner.run(
+        program: resolve(<(String, OnFailure, List<String>)>[
+          ('measures', OnFailure.exit, <String>[]),
+          ('waits', OnFailure.exit, <String>[]),
+        ], arguments: rowCommand),
+        mode: Mode.dry,
+        header: h.header(mode: Mode.dry),
+      );
+
+      expect(record.steps.first.standing, StepStanding.proven);
+      expect(record.steps.last.standing, StepStanding.declared);
+      expect(record.standings, const Standings(proven: 1, declared: 1));
+      expect(
+        record.fullyProven,
+        isFalse,
+        reason: 'the wait answered through a command only the row vouches for',
+      );
+    });
+
+    test(
+      'stays declared when the wait fails, because the failure was measured on trust too',
+      () async {
+        // Every branch of the engine stamps it, not only the green one: what a reached deadline saw
+        // came out of the same unverified command as a yes would have.
+        final Harness h = Harness();
+        final RunRecord record = await h.runner.run(
+          program: resolve(<(String, OnFailure, List<String>)>[
+            ('waits', OnFailure.exit, <String>[]),
+          ], arguments: rowCommand),
+          mode: Mode.run,
+          header: h.header(),
+        );
+
+        expect(record.steps.single.verdict, isA<Failed>());
+        expect(record.steps.single.standing, StepStanding.declared);
+        expect(record.fullyProven, isFalse);
+      },
+    );
   });
 
   group('a row that did not run', () {

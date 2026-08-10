@@ -36,6 +36,34 @@ void main() {
     expect(h.files.contents, isEmpty);
   });
 
+  test('a step whose apply THREW is taken back, which is where it matters most', () async {
+    // The contract on Step.undo says it must tolerate being called after a partial apply, "and that
+    // is exactly when it matters". It used to be the one path where it was never called: an apply
+    // that threw left the step's own branch entirely, and the answer that came back carried no
+    // applied step — so the unwind never reached it, the capture was discarded, and what the step
+    // changed before it threw stood while its kind still said it could be taken back.
+    final Harness h = Harness();
+    final ResolvedProgram program =
+        ProgramResolver(
+          registryOf(
+            steps: <String, (String, Step Function(Arguments))>{
+              'half': ('x:1', (Arguments a) => ChangesThenThrows(path: '/half')),
+            },
+          ),
+        ).resolve(
+          programOf('p', <(String, OnFailure, List<String>)>[('half', OnFailure.exit, <String>[])]),
+        );
+
+    await h.runner.run(program: program, mode: Mode.run, header: h.header());
+
+    expect(h.files.written, contains('/half'), reason: 'the apply really did change something');
+    expect(
+      h.files.contents.containsKey('/half'),
+      isFalse,
+      reason: 'and the throw did not stop it being taken back',
+    );
+  });
+
   test('a step that never ran is not taken back', () async {
     final Harness h = Harness();
     final ResolvedProgram program =

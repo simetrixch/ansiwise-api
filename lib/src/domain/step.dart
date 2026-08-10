@@ -16,6 +16,20 @@ import 'step_context.dart';
 abstract base class Step {
   const Step._();
 
+  /// Whether this step's answer rests on something the program row supplied and no code chose.
+  ///
+  /// The case this exists for: a step that runs whatever command its row names. The row declares
+  /// that the command only looks, and the framework has nothing but that word — it did not choose
+  /// the command, so it cannot verify the claim the dry-run guarantee keys on. The engine stamps
+  /// such a row declared rather than proven, in every mode and whatever the verdict,
+  /// so the closing line's three numbers carry it and the record never puts the weight of a
+  /// measurement behind the row's own claim. The dry-safety check reads the same flag and lists
+  /// these steps instead of counting them safe.
+  ///
+  /// The default is false: a step whose author fixed in code everything it reaches for is answered
+  /// by the framework's own measurements.
+  bool get answersOnTrust => false;
+
   /// Looks at the machine and reports whether this step can run and whether it still needs to.
   ///
   /// Called in every mode, including a dry run, so it must change nothing. The ports it is given

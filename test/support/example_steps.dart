@@ -167,6 +167,38 @@ final class Measures extends ObservingStep {
   Future<StepPlan> plan(StepContext context) async => StepPlan.nothing(because);
 }
 
+/// A wait whose command comes from the program row, so its answer rests on the row's word.
+///
+/// The row declares that the command only looks. No code chose that command, so the framework
+/// cannot verify the claim — the step says so through its trust flag, and the engine stamps every
+/// row of it declared, however the wait comes out.
+final class WaitsOnTheRowsWord extends ObservingStep with WaitStep {
+  const WaitsOnTheRowsWord({required this.command});
+
+  /// What the row said to ask.
+  final String command;
+
+  @override
+  bool get answersOnTrust => true;
+
+  @override
+  Duration get deadline => const Duration(seconds: 60);
+
+  @override
+  Duration get interval => const Duration(seconds: 10);
+
+  @override
+  String get waitingFor => 'the command the row names to answer';
+
+  @override
+  Future<bool> holds(StepContext context) async {
+    final CommandResult answered = await context.shell.run(
+      Command.detailed(command, observes: true, timeout: deadline),
+    );
+    return answered.ok && answered.trimmed.isNotEmpty;
+  }
+}
+
 /// A gate whose whole job is verifying an earlier step, asked before that step has run.
 ///
 /// The one row in this framework that ends up declared. Its check cannot hold in a mode where
@@ -186,4 +218,42 @@ final class VerifiesWhatRanBefore extends ObservingStep {
   @override
   Future<StepPlan> plan(StepContext context) async =>
       const StepPlan.nothing('would read back what the earlier step wrote');
+}
+
+/// A step that changes something and THEN throws, which is the partial apply an undo exists for.
+///
+/// The shape every real one has: it does several things and the second fails. `patch_container_
+/// arguments_and_ports` in this platform's plugin patches a workload declaration and then replaces
+/// the pods, and a delete that returns non-zero throws with the declaration already changed.
+final class ChangesThenThrows extends ReversibleStep<String?> with FileStep {
+  ChangesThenThrows({required this.path});
+
+  final String path;
+
+  @override
+  String pathFor(StepContext context) => path;
+
+  @override
+  int get mode => 0x1a4;
+
+  @override
+  Future<FileContent> contentFor(StepContext context) async => const FileContent.text('written');
+
+  @override
+  Future<String?> capture(StepContext context) => contentBefore(context);
+
+  @override
+  Future<void> apply(StepContext context) async {
+    await super.apply(context);
+    throw CommandFailed(
+      argv: const <String>['second'],
+      exitCode: 1,
+      stderr: 'the second act failed',
+    );
+  }
+
+  @override
+  Future<void> undo(StepContext context, String? captured) async => captured == null
+      ? context.files.delete(path)
+      : context.files.write(path, captured, mode: mode);
 }

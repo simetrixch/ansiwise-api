@@ -48,6 +48,24 @@ final class ProducedAPlan extends DryRunOutcome {
   String toString() => 'planned: $summary';
 }
 
+/// It answered, and the answer rests on something the row supplies and nothing verified.
+///
+/// Not a finding, and not counted safe. The step itself says its answer is taken on trust — a
+/// command the program row names rather than one its author fixed in code — so the guarantee a
+/// clean dry run of it appears to make is the row's claim, not the framework's. What this check can
+/// honestly state about such a step is the list of them, for somebody to read; counting them among
+/// the safe ones would put the check's weight behind that claim.
+final class AnsweredOnTrust extends DryRunOutcome {
+  /// Records the plan the step produced on the row's word.
+  const AnsweredOnTrust(this.summary);
+
+  /// The plan in one line, as the operator would read it.
+  final String summary;
+
+  @override
+  String toString() => 'answered on trust: $summary';
+}
+
 /// A planning port stopped it, and nothing reached the machine behind them.
 final class RefusedByAPort extends DryRunOutcome {
   /// Records what was refused.
@@ -133,9 +151,21 @@ final class DryRunReading {
   final List<Finding> problems;
 
   /// How many steps produced a plan or were refused with nothing reaching the machine.
+  ///
+  /// A step that answered on trust is not among them — it stands in [onTrust] instead.
   int get safeCount => outcomes.values
       .where((DryRunOutcome outcome) => outcome is ProducedAPlan || outcome is RefusedByAPort)
       .length;
+
+  /// The steps whose answer rests on the row's word, by the name a program file writes.
+  ///
+  /// A list rather than a count, because which rows assert this is what an operator has to be able
+  /// to read: for these the dry-run guarantee is whatever the program row declared, and the reader
+  /// of a program that names one of these steps is the one who carries that obligation.
+  List<String> get onTrust => <String>[
+    for (final MapEntry<String, DryRunOutcome> pair in outcomes.entries)
+      if (pair.value is AnsweredOnTrust) pair.key,
+  ];
 
   /// Everything a dry run of this registry would do that it must not.
   List<Finding> get findings => <Finding>[
@@ -234,7 +264,11 @@ Future<DryRunOutcome> askWhatItWouldDo(
     return RefusedByAPort(what);
   }
   if (plan case final StepPlan produced) {
-    return ProducedAPlan(produced.summary);
+    // The step's own word decides which of the two clean outcomes this is. A plan from a step that
+    // answers on trust came through ports that passed the row's claim rather than verifying it.
+    return step.answersOnTrust
+        ? AnsweredOnTrust(produced.summary)
+        : ProducedAPlan(produced.summary);
   }
   return NeitherPlannedNorRefused(what);
 }
