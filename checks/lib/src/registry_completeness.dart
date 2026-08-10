@@ -226,6 +226,15 @@ List<DeclaredStepClass> stepClassesIn(SourceTree tree, {required String under}) 
     for (int i = 0; i < lines.length; i++) {
       if (_stepDeclaration.firstMatch(lines[i])?.group(1) case final String className) {
         found.add(DeclaredStepClass(path: path, line: i + 1, className: className));
+        continue;
+      }
+      // The declaration `dart format` wrapped, which it does once the name and its type argument no
+      // longer fit in one line. Which line that lands on is the formatter's decision, so a scan that
+      // missed it would be reporting the line width.
+      if (_wrappedName.firstMatch(lines[i])?.group(1) case final String className) {
+        if (i + 1 < lines.length && _wrappedKind.hasMatch(lines[i + 1])) {
+          found.add(DeclaredStepClass(path: path, line: i + 1, className: className));
+        }
       }
     }
   }
@@ -234,6 +243,31 @@ List<DeclaredStepClass> stepClassesIn(SourceTree tree, {required String under}) 
 
 final RegExp _driveLetter = RegExp(r'^[A-Za-z]:');
 
+/// How a registrable step class is declared, as one line.
+///
+/// FOUR SHAPES, and three of them were invisible until they were counted:
+///
+/// - `final class Foo extends IrreversibleStep {` — the one this always matched.
+/// - `final class Foo extends ReversibleStep<bool> {` — the TYPE ARGUMENT. Every reversible step
+///   grew one when the framework made the captured value part of the type, and this pattern
+///   required the kind to be the last word on the line. Forty-seven of ninety-one step classes
+///   stopped being seen, the gate stayed green, and nothing said the coverage had halved.
+/// - `... extends ReversibleStep<String?> with FileStep {` — the `with` clause, same failure.
+/// - The declaration `dart format` wrapped because the name and its type argument no longer fit.
+///   That one cannot be matched on a single line at all and is handled where this is used.
+///
+/// `abstract` is deliberately NOT accepted. An abstract class cannot be built from a registry entry,
+/// so a base class that several steps extend is not a step and must not be reported as one missing
+/// an entry.
 final RegExp _stepDeclaration = RegExp(
-  r'^\s*(?:base|final|sealed)?\s*class\s+([A-Za-z][A-Za-z0-9_]*)\s+extends\s+[A-Za-z0-9_]*Step\s*\{?\s*$',
+  r'^\s*(?:base|final|sealed)?\s*class\s+([A-Za-z][A-Za-z0-9_]*)\s+extends\s+'
+  r'[A-Za-z0-9_]*Step\s*(?:<.*>)?\s*(?:with\s+[A-Za-z0-9_,\s]+)?\{?\s*$',
 );
+
+/// The wrapped form: the name on one line, `extends <kind>` on the next.
+final RegExp _wrappedName = RegExp(
+  r'^\s*(?:base|final|sealed)?\s*class\s+([A-Za-z][A-Za-z0-9_]*)\s*$',
+);
+
+/// Whether a line continues a wrapped declaration with the kind it extends.
+final RegExp _wrappedKind = RegExp(r'^\s*extends\s+[A-Za-z0-9_]*Step\s*(?:<.*>)?\s*(?:\{)?\s*$');
