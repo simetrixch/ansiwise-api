@@ -31,10 +31,32 @@ base mixin FileStep on Step {
   ///
   /// Computed rather than stored, because it may depend on what the machine says. It is read in
   /// every mode including a dry run, so it must not change anything — the ports enforce that.
+  ///
+  /// Asked only where [nothingToWriteReason] answered null, so a step whose content cannot even be
+  /// composed on a machine that needs no such file is never asked to compose it.
   Future<String> contentFor(StepContext context);
+
+  /// Why this machine needs no such file at all, or null where it does.
+  ///
+  /// **Not the same as the file already holding the right thing.** That is what the check answers by
+  /// comparing. This is the machine having no business with this file in the first place: a routing
+  /// rule set where nothing is steered, a registry mirror where there is no registry to mirror. On
+  /// such a machine there is nothing to write, nothing to plan, and nothing an undo could take back.
+  ///
+  /// Without it a step in that position could not use this mixin at all — [contentFor] must answer
+  /// with text, and there is no text that means "no file". Every such step wrote its own check, plan
+  /// and apply instead, which is three copies of what is here, per step, differing only in the one
+  /// case this method now expresses.
+  ///
+  /// The reason is written for the operator, because it is what they read in the plan beside a step
+  /// that did nothing. Follows [IrreversibleStep.irreversibleReason] in that.
+  Future<String?> nothingToWriteReason(StepContext context) async => null;
 
   @override
   Future<CheckResult> check(StepContext context) async {
+    if (await nothingToWriteReason(context) case final String because) {
+      return CheckResult.satisfied(because);
+    }
     final String path = pathFor(context);
     final String wanted = await contentFor(context);
     if (!await context.files.exists(path)) {
@@ -48,6 +70,9 @@ base mixin FileStep on Step {
 
   @override
   Future<StepPlan> plan(StepContext context) async {
+    if (await nothingToWriteReason(context) case final String because) {
+      return StepPlan.nothing(because);
+    }
     final String path = pathFor(context);
     final String wanted = await contentFor(context);
     final String current = await context.files.exists(path) ? await context.files.read(path) : '';
@@ -56,6 +81,9 @@ base mixin FileStep on Step {
 
   @override
   Future<void> apply(StepContext context) async {
+    if (await nothingToWriteReason(context) != null) {
+      return;
+    }
     await context.files.write(pathFor(context), await contentFor(context), mode: mode);
   }
 
