@@ -1,7 +1,6 @@
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-
-import 'source_tree.dart';
+import 'package:ansiwise_checks/ansiwise_checks.dart';
 
 /// layering — no import points outward.
 ///
@@ -174,9 +173,18 @@ List<String> outwardImportsIn(SourceTree tree) {
         target = p.posix.normalize(p.posix.join(SourceTree.directoryOf(file), uri));
       }
 
-      if (apiPackage != null && sourcePackage == apiPackage && targetPackage != apiPackage) {
+      // The framework's SHIPPED library may import no other package of this workspace. Its test
+      // tree may: a test is carried onto no machine, so an import there drags a package along for
+      // nobody — and the audits a check is written against are a package of their own for the
+      // reason the exec-confinement rule states, that they walk files and the shipped library may
+      // not. The arrow this rule exists to protect is the one that TRAVELS, and that one is
+      // unchanged.
+      if (apiPackage != null &&
+          sourcePackage == apiPackage &&
+          targetPackage != apiPackage &&
+          _shipsWithTheLibrary(file)) {
         found.add(
-          '$file: imports $uri — the framework package $apiPackage may import no other package of '
+          '$file: imports $uri — the shipped library of $apiPackage may import no other package of '
           'this workspace',
         );
         continue;
@@ -205,6 +213,14 @@ List<String> importUrisIn(String text) => <String>[
 ];
 
 final RegExp _importLine = RegExp(r'''^\s*(?:import|export)\s+(['"])([^'"]+)\1''');
+
+/// Whether [file] is part of what a package depending on this one receives.
+///
+/// Only `lib/` is. Everything else — the tests, the entry point, the gate's own programs — stays in
+/// the repository and reaches nothing that depends on it, which is why the cross-package rule
+/// asks this before it reports.
+bool _shipsWithTheLibrary(String file) =>
+    file == 'lib' || file.startsWith('lib/') || file.contains('/lib/');
 
 /// The package name of the package [tree] holds in a directory called [apiDirectoryName].
 String? _apiPackageOf(SourceTree tree) {

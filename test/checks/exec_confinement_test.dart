@@ -1,6 +1,5 @@
 import 'package:test/test.dart';
-
-import 'source_tree.dart';
+import 'package:ansiwise_checks/ansiwise_checks.dart';
 
 /// exec-confinement — nothing outside infrastructure/ reaches the machine directly.
 ///
@@ -133,7 +132,13 @@ const List<String> waysOut = <String>['dart:io', 'Process', 'File', 'HttpClient'
 /// `tool/` — the gate's own programs. They drive the Dart toolchain on a developer machine and are
 /// never carried onto a deployed one, so no run of a program passes through them and no dry-run
 /// guarantee rests on them.
-const List<String> notTheShippedLibrary = <String>['test', 'bin', 'tool'];
+///
+/// `checks/` — the gate's own AUDITS, a package of their own rather than a directory of this one.
+/// An audit walks a tree of files, so it reaches `dart:io` by necessity; it is a dev dependency of
+/// whatever runs it, compiled into no binary and carried onto no machine, so nothing a run promises
+/// rests on it. Named here for the same reason `tool/` is — and that reason is what the whole list
+/// means: the rule is about what SHIPS, and none of these four does.
+const List<String> notTheShippedLibrary = <String>['test', 'bin', 'tool', 'checks'];
 
 /// The Dart files of [tree] the rule applies to, sorted.
 List<String> confinedFilesOf(SourceTree tree) =>

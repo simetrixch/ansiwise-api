@@ -14,10 +14,20 @@
 /// this check needs to look, and stopping there loses nothing.
 ///
 /// So the rule is stated as its contrapositive, which is the form that can be measured: **every
-/// package the framework reaches is hosted on pub.dev.** Anything else is something of ours, and
-/// the only things of ours below the framework are its plugins.
+/// package the framework reaches from OUTSIDE this repository is hosted on pub.dev.** Anything else
+/// is something of ours, and the only things of ours below the framework are its plugins.
+///
+/// **A package inside this repository is not below the framework — it IS the framework's
+/// repository.** The gate's own audits are such a package: they walk files, so they need `dart:io`,
+/// which the shipped library may not have outside `infrastructure/`, so they cannot live in it. A
+/// rule that forbade that edge would not be protecting anything — a sibling in the same checkout
+/// cannot make a unit non-optional for anybody, and it reaches nothing that depends on the
+/// framework. What it must still
+/// do is be WALKED: a repository-local package that reaches a plugin is the same failure one hop
+/// further out, and it is reported with the chain that got there.
 library;
 
+import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
 /// A package's two manifests, as far as this check reads them.
@@ -50,23 +60,29 @@ final class UnhostedEdge {
   String toString() => '$package — a $kind dependency, reached by ${chain.join(' -> ')}';
 }
 
-/// Every package [root] reaches that is not hosted on pub.dev, with the chain that reached each.
+/// Every package [root] reaches from outside this repository that is not hosted on pub.dev, with
+/// the chain that reached each.
 ///
-/// [manifestsOf] answers with the two manifests of the package declared at a relative path, or null
-/// where they cannot be read. A path whose manifests cannot be read still produces its own finding
-/// — the edge is what is being reported, and an unreadable target does not make the edge allowed.
+/// [manifestsOf] answers with the two manifests of the package at a directory given relative to the
+/// repository root, or null where they cannot be read. A path whose manifests cannot be read still
+/// produces its own finding where it points outside — the edge is what is being reported, and an
+/// unreadable target does not make the edge allowed.
 ///
-/// Walking stops at a hosted dependency and at an edge already reported, so a cycle between two
+/// A declared path is resolved against the directory of the package that DECLARED it, which is what
+/// pub does: `path: ..` written in `checks/pubspec.yaml` means the repository root and not the
+/// parent of wherever the walk started.
+///
+/// Walking stops at a hosted dependency and at a directory already visited, so a cycle between two
 /// path packages terminates.
 List<UnhostedEdge> unhostedReachOf({
   required String root,
   required Manifests manifests,
-  required Manifests? Function(String path) manifestsOf,
+  required Manifests? Function(String directory) manifestsOf,
 }) {
   final List<UnhostedEdge> found = <UnhostedEdge>[];
-  final Set<String> visited = <String>{root};
+  final Set<String> visited = <String>{''};
 
-  void walk(String package, Manifests here, List<String> chain) {
+  void walk(Manifests here, String directory, List<String> chain) {
     for (final _Declared declared in _dependenciesIn(here)) {
       final List<String> reached = <String>[...chain, declared.name];
       if (declared.kind == _hosted || declared.kind == _sdk) {
@@ -74,18 +90,26 @@ List<UnhostedEdge> unhostedReachOf({
         // — neither can lead to an unpublished package of this organisation.
         continue;
       }
-      found.add(UnhostedEdge(package: declared.name, kind: declared.kind, chain: reached));
-      if (declared.path == null || !visited.add(declared.name)) {
+      final String? declaredPath = declared.path;
+      final String? at = declaredPath == null
+          ? null
+          : p.url.normalize(p.url.join(directory, declaredPath));
+      // Inside this repository is not a finding, and is still walked. Outside is reported whether
+      // or not it can be followed.
+      if (at == null || at.startsWith('..')) {
+        found.add(UnhostedEdge(package: declared.name, kind: declared.kind, chain: reached));
+      }
+      if (at == null || !visited.add(at)) {
         continue;
       }
-      final Manifests? beyond = manifestsOf(declared.path!);
+      final Manifests? beyond = manifestsOf(at);
       if (beyond != null) {
-        walk(declared.name, beyond, reached);
+        walk(beyond, at, reached);
       }
     }
   }
 
-  walk(root, manifests, <String>[root]);
+  walk(manifests, '', <String>[root]);
   return found;
 }
 

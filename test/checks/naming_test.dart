@@ -1,7 +1,6 @@
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-
-import 'source_tree.dart';
+import 'package:ansiwise_checks/ansiwise_checks.dart';
 
 /// naming — the abolished words appear in no name.
 ///

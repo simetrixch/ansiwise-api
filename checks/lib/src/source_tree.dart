@@ -58,7 +58,10 @@ final class SourceTree {
 
   /// The tree a counter-probe writes: every path is a key of [files], and the directories are the
   /// prefixes of those paths.
-  factory SourceTree.planted(Map<String, String> files, {String rootName = 'planted'}) {
+  ///
+  /// A path mapped to null is a file that is not text — what [SourceTree.on] answers for a binary.
+  /// Planting one is how a check that reads content is shown to step past what it cannot read.
+  factory SourceTree.planted(Map<String, String?> files, {String rootName = 'planted'}) {
     final Set<String> directories = <String>{};
     for (final String path in files.keys) {
       final List<String> segments = path.split('/');
@@ -81,8 +84,7 @@ final class SourceTree {
     return SourceTree._(rootName: p.basename(root.path), files: files, directories: directories);
   }
 
-  /// What the root directory is called. The cross-package rule of the layering check names a
-  /// directory, so a tree that did not carry its own name could not be judged by it.
+  /// What the root directory is called, for a rule that names one.
   final String rootName;
 
   /// Every file in the tree, against its text — or against null when it is not text.

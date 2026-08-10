@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:ansiwise_checks/ansiwise_checks.dart';
 
 import 'framework_independence.dart';
-import 'source_tree.dart';
 
 /// framework-independence — this framework depends on no plugin, directly or through one.
 ///
@@ -26,7 +26,7 @@ void main() {
       unhostedReachOf(
         root: 'ansiwise_api',
         manifests: _manifestsIn(root.path)!,
-        manifestsOf: (String path) => _manifestsIn(p.join(root.path, path)),
+        manifestsOf: (String directory) => _manifestsIn(p.join(root.path, directory)),
       ),
       isEmpty,
       reason:
@@ -188,6 +188,50 @@ void main() {
       expect(_reach(<String, String>{'': 'name: ansiwise_api\n'}), isEmpty);
     });
 
+    test('a package inside this repository is not a finding', () {
+      // The gate's own audits are such a package: they walk files, so they need dart:io, which the
+      // shipped library may not have outside infrastructure/. A sibling in the same checkout cannot
+      // make a unit non-optional for anybody and reaches nothing that depends on the framework, so
+      // forbidding that edge
+      // would protect nothing.
+      expect(
+        _reach(<String, String>{
+          '': _manifest('ansiwise_api', <String, String>{'yaml': '^3.1.3'}, dev: _gatePackage),
+          'checks': _manifest('ansiwise_checks', <String, String>{'yaml': '^3.1.3'}),
+        }),
+        isEmpty,
+      );
+    });
+
+    test('but it is WALKED, so what it reaches is still reported', () {
+      // The failure this closes: a plugin one hop further out, behind a package that is allowed.
+      // Without walking, moving the edge into the gate package would make it invisible.
+      final List<UnhostedEdge> found = _reach(<String, String>{
+        '': _manifest('ansiwise_api', <String, String>{}, dev: _gatePackage),
+        'checks': _manifest('ansiwise_checks', <String, String>{
+          'planted_plugin': '\n    path: ../../planted-plugins/planted-plugin',
+        }),
+      });
+
+      expect(found.single.package, 'planted_plugin');
+      expect(found.single.chain, <String>['ansiwise_api', 'ansiwise_checks', 'planted_plugin']);
+    });
+
+    test('a path is resolved against the package that declared it, not against the root', () {
+      // `path: ..` written in checks/pubspec.yaml means the repository root. Resolved against the
+      // root instead it would mean the parent of the repository, and the gate package pointing back
+      // at the framework would be reported as reaching outside.
+      expect(
+        _reach(<String, String>{
+          '': _manifest('ansiwise_api', <String, String>{}, dev: _gatePackage),
+          'checks': _manifest('ansiwise_checks', <String, String>{
+            'ansiwise_api': '\n    path: ..',
+          }),
+        }),
+        isEmpty,
+      );
+    });
+
     test('two path packages depending on each other terminate', () {
       // A cycle between units is a mistake somebody will make, and a check that hung on it would be
       // a check nobody could run.
@@ -202,23 +246,31 @@ void main() {
   });
 }
 
-/// Runs the check over manifests given by the path each package sits at, the root being the empty
-/// string.
+/// Runs the check over manifests given by the DIRECTORY each package sits at, relative to the
+/// repository root, which is the empty string.
 List<UnhostedEdge> _reach(Map<String, String> pubspecs) => unhostedReachOf(
   root: 'ansiwise_api',
   manifests: (pubspec: pubspecs['']!, overrides: null),
-  manifestsOf: (String path) {
-    final String? found = pubspecs[path];
+  manifestsOf: (String directory) {
+    final String? found = pubspecs[directory];
     return found == null ? null : (pubspec: found, overrides: null);
   },
 );
 
 /// One manifest, with each dependency written as it would be in a real file.
-String _manifest(String name, Map<String, String> dependencies) =>
+String _manifest(
+  String name,
+  Map<String, String> dependencies, {
+  Map<String, String> dev = const <String, String>{},
+}) =>
     'name: $name\n'
     'publish_to: none\n'
     'dependencies:\n'
-    '${dependencies.entries.map(_dependencyLine).join()}';
+    '${dependencies.entries.map(_dependencyLine).join()}'
+    '${dev.isEmpty ? '' : 'dev_dependencies:\n${dev.entries.map(_dependencyLine).join()}'}';
+
+/// The gate's own package, as this repository declares it: a dev dependency on a sibling directory.
+const Map<String, String> _gatePackage = <String, String>{'ansiwise_checks': '\n    path: checks'};
 
 /// One dependency as it stands under `dependencies:`.
 ///

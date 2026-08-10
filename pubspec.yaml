@@ -24,3 +24,9 @@ dependencies:
 dev_dependencies:
   test: ^1.31.2
   lints: ^6.1.0
+  # The gate's own audits, in a package beside this one because they walk files and the shipped
+  # library may not reach dart:io outside infrastructure/. A DEV dependency: it is never compiled
+  # into anything and travels to no consumer, and framework-independence allows it because a sibling
+  # in this repository is not something below the framework.
+  ansiwise_checks:
+    path: checks
