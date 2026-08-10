@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../domain/arguments.dart';
 import '../../domain/catalogue.dart';
 import '../../domain/resolved_program.dart';
 import '../../domain/run_launcher.dart';
@@ -44,8 +45,14 @@ final class RunsEndpoint {
   /// What puts a record on the wire.
   final RecordJson json;
 
-  /// The commit this installation's branch is on, which is part of what makes an input the same.
-  final String commit;
+  /// What the commit of this installation's branch is, asked at the moment it is needed.
+  ///
+  /// **Asked rather than held.** A session stays open while somebody works, and the branch moves
+  /// under it. Held from start-up, this endpoint would admit a run against a commit the detached
+  /// child then disagrees with: the child recomputes it, its own gate refuses, and it exits before
+  /// writing a header — so the caller holds a run id whose run answers 404 for ever. That is the
+  /// "starts and dies where nobody is watching" this endpoint exists to prevent.
+  final Future<String> Function() commit;
 
   /// `GET /runs` — past runs, newest first.
   Future<ApiResponse> list(ApiRequest request) async {
@@ -116,7 +123,14 @@ final class RunsEndpoint {
       return Refused.badRequest(refused.message);
     }
 
-    final String fingerprint = fingerprintOf(program: program, commit: commit);
+    final String fingerprint = fingerprintOf(
+      program: program,
+      commit: await commit(),
+      answers: Arguments(<String, Object>{
+        for (final MapEntry<String, Object?> given in answers.entries)
+          if (given.value case final Object value) given.key: value,
+      }),
+    );
 
     // Refused here as well as in the run itself, and the duplication is the point: the run refuses
     // because the process that acts has to be sure, and this refuses so that an operator gets a

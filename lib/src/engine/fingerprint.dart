@@ -9,44 +9,91 @@ import '../domain/resolved_program.dart';
 /// What makes two runs the same input.
 ///
 /// The gate refuses a real run unless a clean dry run exists for exactly this value, so what goes
-/// into it decides what an operator is allowed to change between the two. Three things go in, and
-/// each is here for a reason a reader should not have to guess:
+/// into it decides what an operator is allowed to change between the two. Each part is here for a
+/// reason a reader should not have to guess:
 ///
 /// - **the program's name** — the obvious one
 /// - **every argument every step resolved to**, defaults included, because a default that changed
 ///   in the code between the dry run and the real one is a changed input even though nobody typed
 ///   anything
+/// - **every ANSWER the program declared**, because a step reads answers by name out of the run and
+///   they decide what it does: which branch is cut, which configuration file is written, which
+///   machine is treated as the master. A dry run of one installation would otherwise admit a real
+///   run of another
+/// - **whether each row may be taken back**, because a row whose undo is switched off moves the
+///   point of no return, and the operator read that boundary off the dry run
 /// - **the commit** the branch is on, because the same program at a different commit is a different
 ///   set of steps
 ///
 /// What is deliberately NOT in it: the time, the run's own id, and the machine's own name. Those
 /// differ between any two runs, and including them would mean no dry run ever satisfied the gate.
 ///
-/// **What this rests on:** a step's behaviour comes entirely from its declared arguments. A step
-/// that reaches for a value it did not declare — a constant baked into its constructor, something
-/// read from the environment — is invisible here, and two runs that differ only in that value would
-/// fingerprint the same. That is the one way the gate can be fooled, and it is a defect in the step
-/// rather than in this function: the registry builds every step from its arguments, and there is no
-/// other way in.
-String fingerprintOf({required ResolvedProgram program, required String commit}) {
-  final StringBuffer material = StringBuffer()
-    ..writeln(program.declared.name.value)
-    ..writeln(commit);
+/// **A value cannot forge a field.** Every part is written with its length in front of it, so a
+/// value carrying a newline is one value and not the start of another. Written as plain lines, a
+/// step declaring text `a` and text `b` would fingerprint `a: "1\nb=2"` exactly like `a: "1"` with
+/// `b: "2"` — two different runs, one hash, and the gate cannot tell them apart. Both are ordinary
+/// quoted YAML scalars, so this is not a theoretical shape.
+///
+/// **What this still rests on:** a step's behaviour comes entirely from its declared arguments and
+/// the answers it names. A step that reaches for a value from neither — a constant baked into its
+/// constructor, something read from the environment — is invisible here, and two runs that differ
+/// only in that value would fingerprint the same. That is the remaining way the gate can be fooled,
+/// and it is a defect in the step: those are the two ways a value reaches a step, and a step taking
+/// a third is a step nothing can gate.
+String fingerprintOf({
+  required ResolvedProgram program,
+  required String commit,
+  required Arguments answers,
+}) {
+  final StringBuffer material = StringBuffer();
+  _field(material, 'program', program.declared.name.value);
+  _field(material, 'commit', commit);
+
+  // Sorted by the name the PROGRAM declared, so an answer file listing them in another order is the
+  // same input. A declared answer that was not given is written as absent rather than skipped: an
+  // answer going missing between the dry run and the real one is a changed input, and skipping it
+  // would make the two hash alike.
+  for (final ArgumentSpec spec in _sortedByName(program.declared.answers.specs)) {
+    _valued(material, 'answer.${spec.name}', answers.raw(spec.name) ?? spec.defaultValue);
+  }
 
   for (final ResolvedStep step in program.steps) {
-    material
-      ..writeln(step.entry.step.value)
-      ..writeln(step.entry.onFailure.name);
+    _field(material, 'step', step.entry.step.value);
+    _field(material, 'on_failure', step.entry.onFailure.name);
+    _field(material, 'undo', step.entry.undo.toString());
     for (final ArgumentSpec spec in _sortedByName(step.registered.arguments)) {
       final Object? given = step.entry.arguments.raw(spec.name);
-      material.writeln('${spec.name}=${given ?? spec.defaultValue}');
+      _valued(material, 'argument.${spec.name}', given ?? spec.defaultValue);
     }
     for (final RegisteredPredicate predicate in step.when) {
-      material.writeln('when=${predicate.name.value}');
+      _field(material, 'when', predicate.name.value);
     }
   }
 
   return sha256.convert(utf8.encode(material.toString())).toString();
+}
+
+/// Writes one part of the material so nothing inside it can be read as a boundary.
+///
+/// The length is in BYTES rather than characters, because that is what is hashed — a character count
+/// would let two values of different byte length share a prefix on a multi-byte character.
+void _field(StringBuffer material, String name, String value) {
+  final int nameBytes = utf8.encode(name).length;
+  final int valueBytes = utf8.encode(value).length;
+  material.write('$nameBytes:$name$valueBytes:$value');
+}
+
+/// Writes [name] against [value], or records that there was none.
+///
+/// **Absence is a different FIELD, not a reserved value.** An answer nobody gave and an answer given
+/// as nothing lead a step to do different things, so the two must not hash alike - and any marker
+/// written in the value's place would be a value some run could legitimately hold.
+void _valued(StringBuffer material, String name, Object? value) {
+  if (value == null) {
+    _field(material, '$name.absent', '');
+    return;
+  }
+  _field(material, name, value.toString());
 }
 
 List<ArgumentSpec> _sortedByName(List<ArgumentSpec> specs) {

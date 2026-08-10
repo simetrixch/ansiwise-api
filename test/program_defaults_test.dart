@@ -132,6 +132,57 @@ steps:
   });
 
   group('what is refused', () {
+    test('a secret answer of a kind the redactor cannot read', () {
+      // What reads a secret answer reads it as text - that is how a value gets into the redactor,
+      // the one thing standing between a credential and a world-readable record. Declared on
+      // another kind it passed every check and then threw where the redactor is built, after
+      // validation, with a message naming a type rather than the declaration that caused it.
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: writes_a_file
+    path: /one
+    content: x
+    on_failure: exit
+answers:
+  - name: token
+    kind: integer
+    secret: true
+    describes: the credential
+''', where: 'p.yaml'),
+        throwsA(
+          isA<ProgramInvalid>().having(
+            (ProgramInvalid it) => it.message,
+            'message',
+            allOf(contains('token'), contains('holds text')),
+          ),
+        ),
+      );
+    });
+
+    test('a secret answer of text is accepted', () {
+      // The other half: the refusal is about the KIND and not about the word secret.
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: writes_a_file
+    path: /one
+    content: x
+    on_failure: exit
+answers:
+  - name: token
+    kind: text
+    secret: true
+    describes: the credential
+''', where: 'p.yaml'),
+        returnsNormally,
+      );
+    });
+
     test('a default no step of the program declares', () {
       // The failure this catches is a misspelling. The key sits in the file filling nothing, every
       // step runs on its own default, and the file says something else — with nothing reporting it.
@@ -289,6 +340,7 @@ steps:
     on_failure: exit
 '''),
       commit: 'abc',
+      answers: Arguments.none,
     );
 
     test('changing a program default changes the fingerprint', () {
@@ -313,6 +365,7 @@ steps:
     on_failure: exit
 '''),
         commit: 'abc',
+        answers: Arguments.none,
       );
 
       expect(fingerprintFor('the same'), written);

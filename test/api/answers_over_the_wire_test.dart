@@ -76,7 +76,7 @@ void main() {
         catalogue: catalogue,
         gate: Gate(store),
         json: const PlainRecordJson(),
-        commit: 'abc1234',
+        commit: () async => 'abc1234',
       ),
       events: EventsEndpoint(store: store, json: const PlainRecordJson()),
     );
@@ -171,7 +171,7 @@ void main() {
           catalogue: catalogue,
           gate: const Gate(store),
           json: const PlainRecordJson(),
-          commit: 'abc1234',
+          commit: () async => 'abc1234',
         ),
         events: const EventsEndpoint(store: store, json: PlainRecordJson()),
       );
@@ -235,7 +235,7 @@ void main() {
           catalogue: catalogue,
           gate: const Gate(store),
           json: const PlainRecordJson(),
-          commit: 'abc1234',
+          commit: () async => 'abc1234',
         ),
         events: const EventsEndpoint(store: store, json: PlainRecordJson()),
       );
@@ -267,7 +267,7 @@ void main() {
           catalogue: catalogue,
           gate: const Gate(store),
           json: const PlainRecordJson(),
-          commit: 'abc1234',
+          commit: () async => 'abc1234',
         ),
         events: const EventsEndpoint(store: store, json: PlainRecordJson()),
       );
@@ -290,7 +290,7 @@ void main() {
           catalogue: catalogue,
           gate: const Gate(store),
           json: const PlainRecordJson(),
-          commit: 'abc1234',
+          commit: () async => 'abc1234',
         ),
         events: const EventsEndpoint(store: store, json: PlainRecordJson()),
       );

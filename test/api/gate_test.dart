@@ -68,7 +68,7 @@ void main() {
           catalogue: catalogue,
           gate: Gate(store, requireDryRun: requireDryRun),
           json: const PlainRecordJson(),
-          commit: commit,
+          commit: () async => commit,
         ),
         events: EventsEndpoint(store: store, json: const PlainRecordJson()),
       ),
@@ -106,7 +106,7 @@ void main() {
           id: 'the-dry-one',
           program: 'deploy-cluster',
           mode: Mode.dry,
-          fingerprint: fingerprintOf(program: program, commit: commit),
+          fingerprint: fingerprintOf(program: program, commit: commit, answers: Arguments.none),
           exitCode: 0,
         ),
       );
@@ -139,6 +139,7 @@ void main() {
           fingerprint: fingerprintOf(
             program: deployCluster(path: '/etc/somewhere-else'),
             commit: commit,
+            answers: Arguments.none,
           ),
           exitCode: 0,
         ),
@@ -162,7 +163,7 @@ void main() {
           id: 'the-failed-one',
           program: 'deploy-cluster',
           mode: Mode.dry,
-          fingerprint: fingerprintOf(program: program, commit: commit),
+          fingerprint: fingerprintOf(program: program, commit: commit, answers: Arguments.none),
           exitCode: 1,
         ),
       );
@@ -275,7 +276,7 @@ void main() {
           id: 'the-dry-one',
           program: 'deploy-cluster',
           mode: Mode.dry,
-          fingerprint: fingerprintOf(program: program, commit: commit),
+          fingerprint: fingerprintOf(program: program, commit: commit, answers: Arguments.none),
           exitCode: 0,
         ),
       );
@@ -318,15 +319,15 @@ void main() {
   group('what makes two runs the same input', () {
     test('the same program at the same commit fingerprints the same', () {
       expect(
-        fingerprintOf(program: deployCluster(), commit: commit),
-        fingerprintOf(program: deployCluster(), commit: commit),
+        fingerprintOf(program: deployCluster(), commit: commit, answers: Arguments.none),
+        fingerprintOf(program: deployCluster(), commit: commit, answers: Arguments.none),
       );
     });
 
     test('a different commit is a different input', () {
       expect(
-        fingerprintOf(program: deployCluster(), commit: commit),
-        isNot(fingerprintOf(program: deployCluster(), commit: 'def5678')),
+        fingerprintOf(program: deployCluster(), commit: commit, answers: Arguments.none),
+        isNot(fingerprintOf(program: deployCluster(), commit: 'def5678', answers: Arguments.none)),
       );
     });
   });

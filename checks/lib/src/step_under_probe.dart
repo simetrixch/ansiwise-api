@@ -53,36 +53,6 @@ Arguments plausibleArguments(List<ArgumentSpec> specs) {
   return Arguments(values);
 }
 
-/// A value for every answer any program under [directory] declares.
-///
-/// A step reads its answers BY NAME out of the run, and the kinds are declared by the program file
-/// rather than by the registry — so the only place a check can learn that `alert_recipients` is a
-/// list of text and `fqdn` is text is the program files themselves. They are read here rather than
-/// listed, so a check never has to be edited when a program gains a question.
-///
-/// The union of every program's declarations, because a check runs each registered step once and
-/// does not know which program will name it. Two programs declaring one name with different kinds
-/// would make this ambiguous; the resolver would refuse such a pair anyway, and until then the first
-/// one read wins.
-Future<Arguments> plausibleAnswers(Files files, String directory) async {
-  final List<ArgumentSpec> declared = <ArgumentSpec>[];
-  final Set<String> seen = <String>{};
-  final List<String> names = <String>[
-    for (final String name in await files.list(directory))
-      if (name.endsWith('.yaml')) name,
-  ]..sort();
-
-  for (final String name in names) {
-    final Program program = loadProgram(await files.read('$directory/$name'), where: name);
-    for (final ArgumentSpec spec in program.answers.specs) {
-      if (seen.add(spec.name)) {
-        declared.add(spec);
-      }
-    }
-  }
-  return plausibleArguments(declared);
-}
-
 /// The step [entry] builds from [plausibleArguments], or null when it cannot be built that way.
 ///
 /// [onFailure] is given a finding naming the step and the reason. Every throwable is caught,

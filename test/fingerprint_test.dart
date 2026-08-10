@@ -1,0 +1,198 @@
+import 'package:ansiwise_api/ansiwise_api.dart';
+import 'package:test/test.dart';
+
+import 'support/example_steps.dart';
+import 'support/harness.dart';
+
+/// What makes two runs the same input, and what must therefore not be missing from it.
+///
+/// A real run is admitted only where a dry run of the same fingerprint came back green. Everything
+/// a step can act on has to reach this hash, or the gate hands an operator a green verdict for a run
+/// nobody performed — the one failure this framework must never produce, because it is discovered at
+/// the moment it is relied on.
+void main() {
+  Registry registry() => registryOf(
+    steps: <String, (String, Step Function(Arguments))>{
+      'writes_a_file': (
+        'x:1',
+        (Arguments a) => WritesAFile(path: a.text('path'), content: a.text('content')),
+      ),
+    },
+    arguments: <String, List<ArgumentSpec>>{
+      'writes_a_file': const <ArgumentSpec>[
+        ArgumentSpec(name: 'path', kind: ArgumentKind.text, describes: 'the file to write'),
+        // One required and one with a default is what the forging case needs: the value of the
+        // first can be made to end where the second's field would begin, and the second then
+        // supplies the rest out of its own default.
+        ArgumentSpec(
+          name: 'content',
+          kind: ArgumentKind.text,
+          describes: 'what goes in it',
+          required: false,
+          defaultValue: 'three',
+        ),
+      ],
+    },
+  );
+
+  /// A program declaring two answers, so a run can differ in one of them and nothing else.
+  Program programWithAnswers({bool undo = true, String path = '/one'}) => Program(
+    name: const ProgramName('p'),
+    roles: <Role>[const Role('master')],
+    answers: const DeclaredAnswers(<ArgumentSpec>[
+      ArgumentSpec(name: 'fqdn', kind: ArgumentKind.text, describes: 'the domain'),
+      ArgumentSpec(
+        name: 'stage',
+        kind: ArgumentKind.text,
+        describes: 'which stage',
+        required: false,
+        defaultValue: 'dev',
+      ),
+    ]),
+    steps: <ProgramStep>[
+      ProgramStep(
+        step: const StepName('writes_a_file'),
+        onFailure: OnFailure.exit,
+        arguments: Arguments(<String, Object>{'path': path}),
+        undo: undo,
+      ),
+    ],
+  );
+
+  String fingerprintFor({
+    Map<String, Object> answers = const <String, Object>{},
+    bool undo = true,
+    String path = '/one',
+    String commit = 'abc',
+  }) => fingerprintOf(
+    program: ProgramResolver(registry()).resolve(programWithAnswers(undo: undo, path: path)),
+    commit: commit,
+    answers: Arguments(answers),
+  );
+
+  group("the operator's answers decide what a step does, so they are part of the input", () {
+    test('two runs differing only in one answer do not share a fingerprint', () {
+      // The scenario this closes: a dry run for one installation admitting a real run against
+      // another. Steps take the branch name, the configuration file and the master from answers.
+      expect(
+        fingerprintFor(answers: <String, Object>{'fqdn': 'a.example'}),
+        isNot(fingerprintFor(answers: <String, Object>{'fqdn': 'b.example'})),
+      );
+    });
+
+    test('the same answers twice are one input', () {
+      expect(
+        fingerprintFor(answers: <String, Object>{'fqdn': 'a.example', 'stage': 'prod'}),
+        fingerprintFor(answers: <String, Object>{'fqdn': 'a.example', 'stage': 'prod'}),
+      );
+    });
+
+    test('the order they were given in is not part of the input', () {
+      // An answer file listing them the other way round is the same run, and an operator repeating
+      // a dry run over a reordered file would be repeating it for nothing.
+      expect(
+        fingerprintFor(answers: <String, Object>{'fqdn': 'a.example', 'stage': 'prod'}),
+        fingerprintFor(answers: <String, Object>{'stage': 'prod', 'fqdn': 'a.example'}),
+      );
+    });
+
+    test('an answer left out and an answer given as nothing are different inputs', () {
+      // A step reads them differently on purpose — an empty domain is a domain somebody cleared,
+      // and a missing one is a question nobody answered.
+      expect(fingerprintFor(answers: <String, Object>{'fqdn': ''}), isNot(fingerprintFor()));
+    });
+
+    test("an answer's declared default is what an unanswered one hashes as", () {
+      // Otherwise the gate would see a change where the run sees none: the step is handed the
+      // default either way.
+      expect(
+        fingerprintFor(answers: <String, Object>{'fqdn': 'a.example'}),
+        fingerprintFor(answers: <String, Object>{'fqdn': 'a.example', 'stage': 'dev'}),
+      );
+    });
+  });
+
+  group('what the run cannot take back is part of the input', () {
+    test('the same row with its undo switched off is a different input', () {
+      // A row whose undo is off moves the point of no return, and the operator read that boundary
+      // off the dry run. Invisible here, it could be switched off behind a green one.
+      expect(fingerprintFor(), isNot(fingerprintFor(undo: false)));
+    });
+  });
+
+  group('a value cannot forge a field', () {
+    /// A step whose REQUIRED argument sorts before its DEFAULTED one.
+    ///
+    /// That order is what the collision needs: the required value is written first and can be made
+    /// to end where the next field would begin, and the defaulted one then supplies the rest out of
+    /// its own default without anybody writing it.
+    Registry forging() => registryOf(
+      steps: <String, (String, Step Function(Arguments))>{
+        'writes_a_file': (
+          'x:1',
+          (Arguments a) => WritesAFile(path: a.text('b'), content: a.text('a')),
+        ),
+      },
+      arguments: <String, List<ArgumentSpec>>{
+        'writes_a_file': const <ArgumentSpec>[
+          ArgumentSpec(name: 'a', kind: ArgumentKind.text, describes: 'what goes in the file'),
+          ArgumentSpec(
+            name: 'b',
+            kind: ArgumentKind.text,
+            describes: 'the file',
+            required: false,
+            defaultValue: 'three',
+          ),
+        ],
+      },
+    );
+
+    String forOf(Map<String, Object> arguments) => fingerprintOf(
+      program: ProgramResolver(forging()).resolve(
+        Program(
+          name: const ProgramName('p'),
+          roles: <Role>[const Role('master')],
+          steps: <ProgramStep>[
+            ProgramStep(
+              step: const StepName('writes_a_file'),
+              onFailure: OnFailure.exit,
+              arguments: Arguments(arguments),
+            ),
+          ],
+        ),
+      ),
+      commit: 'abc',
+      answers: Arguments.none,
+    );
+
+    test('two different inputs that would write the same lines are different', () {
+      // The collision this closes, as it would look written one `<field>=<value>` line each. The
+      // injected text spells the field name the material actually uses, so this measures the length
+      // prefix and not the choice of name — a name a value cannot guess is not a guarantee, it is
+      // an obstacle, and the next name somebody picks would be guessable again.
+      //
+      //   left    argument.a = one, newline, argument.b=two   b left out, so its default three
+      //   right   argument.a = one                            b = two, newline, argument.b=three
+      //
+      // Both then read: argument.a=one / argument.b=two / argument.b=three. Two runs writing a
+      // different file with different text, one hash, and the gate admits the second on the first's
+      // dry run. Both values are ordinary quoted YAML scalars.
+      final String left = forOf(<String, Object>{'a': 'one\nargument.b=two'});
+      final String right = forOf(<String, Object>{'a': 'one', 'b': 'two\nargument.b=three'});
+
+      expect(left, isNot(right));
+    });
+
+    test('a value that looks like a length prefix is still one value', () {
+      // The same attack against the notation that replaced it: the length is written in front of
+      // the value, so a value beginning with digits and a colon must not be read as one.
+      expect(forOf(<String, Object>{'a': '5:/one'}), isNot(forOf(<String, Object>{'a': '/one'})));
+    });
+  });
+
+  group('what stays out of it', () {
+    test('the commit is in, because the same program at another commit is other steps', () {
+      expect(fingerprintFor(commit: 'abc'), isNot(fingerprintFor(commit: 'def')));
+    });
+  });
+}

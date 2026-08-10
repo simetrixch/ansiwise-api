@@ -164,6 +164,17 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
       refusals.add(line, '"$name": "secret" is true or false');
       continue;
     }
+    if (isSecret == true && resolved != ArgumentKind.text) {
+      // What reads a secret answer reads it as TEXT — that is how a value gets into the redactor,
+      // which is the one thing standing between a credential and a world-readable record. Declared
+      // on another kind it passes every check here and then throws where the redactor is built,
+      // after validation, with a message naming a type rather than this declaration.
+      refusals.add(
+        line,
+        '"$name" is secret, so it holds text — a secret of another kind cannot be redacted',
+      );
+      continue;
+    }
 
     final Object? fallback = entry['default'];
     if (fallback != null && isSecret == true) {

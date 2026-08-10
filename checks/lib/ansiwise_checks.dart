@@ -23,10 +23,14 @@
 library;
 
 export 'src/config_validity.dart';
+export 'src/declared_answers.dart';
+export 'src/declared_checks.dart';
+export 'src/directive_case.dart';
 export 'src/dry_safety.dart';
 export 'src/exec_confinement.dart';
 export 'src/finding.dart';
 export 'src/idempotence.dart';
+export 'src/installation_programs.dart';
 export 'src/line_endings.dart';
 export 'src/naming.dart';
 export 'src/registry_completeness.dart';

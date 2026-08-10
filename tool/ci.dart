@@ -21,6 +21,7 @@ library;
 import 'dart:io';
 
 import 'gate/dart_packages.dart';
+import 'gate/declared_checks.dart';
 import 'gate/gate_log.dart';
 import 'gate/package_gate.dart';
 import 'gate/paths.dart';
@@ -43,6 +44,22 @@ Future<void> main(List<String> arguments) async {
 
   final Directory repository = packageOfToolScript(Platform.script);
   const GateLog log = StdoutGateLog();
+
+  // BEFORE ANYTHING RUNS, because a suite cannot report a check that is not in it. Each package
+  // declares its checks and carries the one that holds the declaration against the disk; what that
+  // one cannot do is notice that the file holding it is gone, and this is where that is noticed.
+  log.heading('declared checks');
+  final List<String> undeclared = undeclaredSuites(dartPackagesIn(repository));
+  if (undeclared.isNotEmpty) {
+    for (final String refusal in undeclared) {
+      stderr.writeln('  $refusal');
+    }
+    stderr.writeln('ci: FAIL — declared checks');
+    exit(1);
+  }
+  stdout.writeln(
+    'every package with a suite declares its checks and carries the check that reads it',
+  );
   final GateVerdict verdict = await PackageGate(
     toolchain: const RealDartToolchain(),
     packages: dartPackagesIn(repository),

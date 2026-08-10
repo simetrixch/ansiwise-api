@@ -67,7 +67,7 @@ void main() {
           catalogue: catalogue,
           gate: Gate(store),
           json: const PlainRecordJson(),
-          commit: commit,
+          commit: () async => commit,
         ),
         events: EventsEndpoint(store: store, json: const PlainRecordJson()),
       ),
@@ -86,7 +86,7 @@ void main() {
         id: id,
         program: 'deploy-cluster',
         mode: Mode.dry,
-        fingerprint: fingerprintOf(program: program, commit: commit),
+        fingerprint: fingerprintOf(program: program, commit: commit, answers: Arguments.none),
         exitCode: 0,
       ),
     );
@@ -109,7 +109,7 @@ void main() {
           id: 'the-one-that-stopped',
           program: 'deploy-cluster',
           mode: Mode.run,
-          fingerprint: fingerprintOf(program: program, commit: commit),
+          fingerprint: fingerprintOf(program: program, commit: commit, answers: Arguments.none),
           exitCode: 1,
         ),
       );
@@ -191,6 +191,7 @@ void main() {
           fingerprint: fingerprintOf(
             program: deployCluster(path: '/etc/somewhere-else'),
             commit: commit,
+            answers: Arguments.none,
           ),
           exitCode: 1,
         ),
@@ -267,7 +268,7 @@ void main() {
           id: 'the-clean-one',
           program: 'deploy-cluster',
           mode: Mode.run,
-          fingerprint: fingerprintOf(program: program, commit: commit),
+          fingerprint: fingerprintOf(program: program, commit: commit, answers: Arguments.none),
           exitCode: 0,
         ),
       );
