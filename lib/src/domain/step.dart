@@ -93,11 +93,17 @@ abstract base class ReversibleStep<T> extends Step {
 /// taking them back does not arise — which is why they are their own kind rather than a
 /// [ReversibleStep] with an empty undo or an [IrreversibleStep] with a reason that is not true.
 ///
-/// **Its check answers [Satisfied] or [Blocked], never [Ready].** There is no work to do, so a
-/// third answer would mean the engine calls [Step.apply], which does nothing, and then finds the
+/// **A gate's check answers [Satisfied] or [Blocked], never [Ready].** A gate has no work to do, so
+/// a third answer would mean the engine calls [Step.apply], which does nothing, and then finds the
 /// machine unchanged — reported as a failure for a reason nobody could act on. A gate that holds is
 /// satisfied; one that does not is blocked, and what that costs the run is the program's declared
 /// policy.
+///
+/// **The one thing that answers [Ready] here is a WAIT**, and it is not an exception to the
+/// sentence above but to its reason: `WaitStep` supplies an apply, so `Ready` sends the engine to
+/// work that exists. A wait belongs to this kind for the same reason a gate does — it changes
+/// nothing on the machine, so it is neither reversible nor irreversible — and what it does with the
+/// time is ask the same question again.
 abstract base class ObservingStep extends Step {
   /// Creates a step that only measures.
   const ObservingStep() : super._();
