@@ -1,6 +1,7 @@
 import '../domain/step.dart';
 import '../domain/step_context.dart';
 import '../model/check_result.dart';
+import '../model/file_content.dart';
 import '../model/step_plan.dart';
 
 /// A step whose work is writing one file.
@@ -27,64 +28,62 @@ base mixin FileStep on Step {
   /// only its owner may, and there is no sensible guess between the two.
   int get mode;
 
-  /// What the file should hold.
+  /// What the file should hold, or why this machine needs no such file.
   ///
   /// Computed rather than stored, because it may depend on what the machine says. It is read in
   /// every mode including a dry run, so it must not change anything — the ports enforce that.
   ///
-  /// Asked only where [nothingToWriteReason] answered null, so a step whose content cannot even be
-  /// composed on a machine that needs no such file is never asked to compose it.
-  Future<String> contentFor(StepContext context);
-
-  /// Why this machine needs no such file at all, or null where it does.
+  /// **[FileContent.nothing] is the answer for a machine that has no business with the file at
+  /// all** — a routing rule set where nothing is steered, a registry mirror where there is no
+  /// registry to mirror. Without it a step in that position could not use this mixin: there is no
+  /// text that means "no file", so each wrote its own check, plan and apply instead, three copies of
+  /// what is here differing in exactly that one case.
   ///
-  /// **Not the same as the file already holding the right thing.** That is what the check answers by
-  /// comparing. This is the machine having no business with this file in the first place: a routing
-  /// rule set where nothing is steered, a registry mirror where there is no registry to mirror. On
-  /// such a machine there is nothing to write, nothing to plan, and nothing an undo could take back.
-  ///
-  /// Without it a step in that position could not use this mixin at all — [contentFor] must answer
-  /// with text, and there is no text that means "no file". Every such step wrote its own check, plan
-  /// and apply instead, which is three copies of what is here, per step, differing only in the one
-  /// case this method now expresses.
-  ///
-  /// The reason is written for the operator, because it is what they read in the plan beside a step
-  /// that did nothing. Follows [IrreversibleStep.irreversibleReason] in that.
-  Future<String?> nothingToWriteReason(StepContext context) async => null;
+  /// One question and not two, because both answers usually come from the same reading: a step
+  /// composes its text out of what it found, and where it found nothing there is no text to compose.
+  /// Asked separately, the reading happens twice and the step is left writing a branch it can prove
+  /// unreachable and the compiler cannot.
+  Future<FileContent> contentFor(StepContext context);
 
   @override
   Future<CheckResult> check(StepContext context) async {
-    if (await nothingToWriteReason(context) case final String because) {
-      return CheckResult.satisfied(because);
+    switch (await contentFor(context)) {
+      case NothingToWrite(:final String because):
+        return CheckResult.satisfied(because);
+      case TextContent(:final String text):
+        final String path = pathFor(context);
+        if (!await context.files.exists(path)) {
+          return const CheckResult.ready();
+        }
+        return await context.files.read(path) == text
+            ? CheckResult.satisfied('$path already holds what this step writes')
+            : const CheckResult.ready();
     }
-    final String path = pathFor(context);
-    final String wanted = await contentFor(context);
-    if (!await context.files.exists(path)) {
-      return const CheckResult.ready();
-    }
-    final String current = await context.files.read(path);
-    return current == wanted
-        ? CheckResult.satisfied('$path already holds what this step writes')
-        : const CheckResult.ready();
   }
 
   @override
   Future<StepPlan> plan(StepContext context) async {
-    if (await nothingToWriteReason(context) case final String because) {
-      return StepPlan.nothing(because);
+    switch (await contentFor(context)) {
+      case NothingToWrite(:final String because):
+        return StepPlan.nothing(because);
+      case TextContent(:final String text):
+        final String path = pathFor(context);
+        final String current = await context.files.exists(path)
+            ? await context.files.read(path)
+            : '';
+        return StepPlan.diff(path, before: current, after: text);
     }
-    final String path = pathFor(context);
-    final String wanted = await contentFor(context);
-    final String current = await context.files.exists(path) ? await context.files.read(path) : '';
-    return StepPlan.diff(path, before: current, after: wanted);
   }
 
   @override
   Future<void> apply(StepContext context) async {
-    if (await nothingToWriteReason(context) != null) {
-      return;
+    // A machine with nothing to write is left alone. The engine only applies a step whose check
+    // answered Ready, so this cannot be reached through a run — it is here because the mixin is
+    // what a plugin author overrides one method of, and an apply that wrote regardless would put a
+    // file on a machine whose own check had just said it has no business with one.
+    if (await contentFor(context) case TextContent(:final String text)) {
+      await context.files.write(pathFor(context), text, mode: mode);
     }
-    await context.files.write(pathFor(context), await contentFor(context), mode: mode);
   }
 
   /// What the file held before this step wrote it, or null when it was not there.

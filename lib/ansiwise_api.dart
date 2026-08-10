@@ -62,6 +62,7 @@ export 'src/engine/point_of_no_return.dart';
 export 'src/engine/unwind.dart';
 export 'src/model/check_result.dart';
 export 'src/model/failures.dart';
+export 'src/model/file_content.dart';
 export 'src/model/mode.dart';
 export 'src/model/names.dart';
 export 'src/model/on_failure.dart';

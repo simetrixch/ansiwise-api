@@ -79,10 +79,10 @@ void main() {
       expect(files.contents, isEmpty);
     });
 
-    test('is not asked what the content would be', () async {
+    test('never reaches the composing of text', () async {
       // The case this exists for is a machine where the content cannot be composed at all — the
-      // rules name an interface that was not found. A mixin that asked anyway would throw on the
-      // one machine the answer is meant to spare.
+      // rules name an interface that was not found. A step answers FileContent.nothing BEFORE it
+      // composes, which is what lets it be written without a branch it can prove unreachable.
       final _Rules step = _Rules(needed: false);
       final StepContext context = contextOn(FakeFiles());
 
@@ -90,13 +90,14 @@ void main() {
       await step.plan(context);
       await step.apply(context);
 
-      expect(step.composed, isFalse, reason: 'contentFor was reached on a machine with no file');
+      expect(step.composed, isFalse, reason: 'the text was composed on a machine with no file');
     });
   });
 
-  group('a step that says nothing about it', () {
-    test('behaves exactly as it did before', () async {
-      // The default answers null, so every FileStep written before this existed is unchanged.
+  group('a step that always has something to write', () {
+    test('is unaffected by the second answer existing', () async {
+      // The ordinary case, which is most of them: a step that answers with text every time behaves
+      // exactly as it did when text was the only answer there was.
       expect(await const _Plain().check(contextOn(FakeFiles())), isA<Ready>());
       expect(await const _Plain().plan(contextOn(FakeFiles())), isA<DiffPlan>());
     });
@@ -115,7 +116,8 @@ final class _Rules extends IrreversibleStep with FileStep {
 
   final bool needed;
 
-  /// Whether [contentFor] was reached.
+  /// Whether the text was composed. What the one test reading it asks is that a machine with no
+  /// file never reaches the composing, which is where a step that cannot compose there would throw.
   bool composed = false;
 
   @override
@@ -128,16 +130,16 @@ final class _Rules extends IrreversibleStep with FileStep {
   int get mode => 0x1a4;
 
   @override
-  Future<String?> nothingToWriteReason(StepContext context) async => needed ? null : notHere;
-
-  @override
-  Future<String> contentFor(StepContext context) async {
+  Future<FileContent> contentFor(StepContext context) async {
+    if (!needed) {
+      return const FileContent.nothing(notHere);
+    }
     composed = true;
-    return text;
+    return const FileContent.text(text);
   }
 }
 
-/// A file step from before this existed, which must be unaffected.
+/// A file step with something to write on every machine, which is most of them.
 final class _Plain extends IrreversibleStep with FileStep {
   const _Plain();
 
@@ -151,7 +153,7 @@ final class _Plain extends IrreversibleStep with FileStep {
   int get mode => 0x1a4;
 
   @override
-  Future<String> contentFor(StepContext context) async => 'x';
+  Future<FileContent> contentFor(StepContext context) async => const FileContent.text('x');
 }
 
 /// A log for a test that has to build a context and has nothing to say in it.
