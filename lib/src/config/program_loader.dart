@@ -45,7 +45,7 @@ Program loadProgram(String yaml, {required String where}) {
   _refuseAnchors(root, refusals);
 
   if (root is! YamlMap) {
-    refusals.add(root.span.start.line, 'a program is a map with the keys "name", "roles", "steps"');
+    refusals.add(root.span.start.line, 'a program is a map, and its keys are $_programKeyList');
     refusals.refuse(where);
   }
 
@@ -54,6 +54,7 @@ Program loadProgram(String yaml, {required String where}) {
   final List<Role> roles = _roles(root, refusals);
   final List<ProgramStep> steps = _steps(root, refusals);
   final DeclaredAnswers answers = _answers(root, refusals);
+  final Arguments defaults = _defaults(root, refusals);
 
   // [_name] returns null only where it has already recorded a refusal, so the second half of this
   // condition never produces an empty message — and past it the name is a value rather than a
@@ -61,7 +62,38 @@ Program loadProgram(String yaml, {required String where}) {
   if (refusals.any || name == null) {
     refusals.refuse(where);
   }
-  return Program(name: name, roles: roles, steps: steps, answers: answers);
+  return Program(name: name, roles: roles, steps: steps, answers: answers, defaults: defaults);
+}
+
+/// The values this program gives to every step that takes them, as the file writes them.
+///
+/// A flat map of names to values, read exactly like a row's arguments so a value has the same shape
+/// in both places. Whether a step declares the name at all is asked against the registry afterwards,
+/// which is where a name that fills nothing is refused.
+Arguments _defaults(YamlMap root, _Refusals refusals) {
+  final YamlNode? node = root.nodes['defaults'];
+  if (node == null) {
+    return Arguments.none;
+  }
+  if (node is! YamlMap) {
+    refusals.add(node.span.start.line, '"defaults" is a map of argument names to values');
+    return Arguments.none;
+  }
+  final Map<String, Object> values = <String, Object>{};
+  for (final MapEntry<Object?, YamlNode> pair in node.nodes.entries) {
+    if (pair.key case YamlScalar(value: final String key)) {
+      final Object? value = _argument(pair.value, key, 'defaults', refusals);
+      if (value != null) {
+        values[key] = value;
+      }
+      continue;
+    }
+    refusals.add(
+      _lineOf(pair.key) ?? pair.value.span.start.line,
+      'defaults: an argument name is text, and the file gives something else',
+    );
+  }
+  return Arguments(values);
 }
 
 /// What an operator has to supply, as the file declares it.
@@ -207,7 +239,14 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
 }
 
 /// The keys a program file may write at the top level.
-const Set<String> _programKeys = <String>{'name', 'roles', 'steps', 'answers'};
+const Set<String> _programKeys = <String>{'name', 'roles', 'steps', 'answers', 'defaults'};
+
+/// The keys above, as a refusal writes them.
+///
+/// Derived rather than written out a second time: the two lists were kept in step by hand until a
+/// key was added and the refusals went on naming three, so an operator mistyping the new key was
+/// told it does not exist.
+final String _programKeyList = _programKeys.map((String key) => '"$key"').join(', ');
 
 /// The keys one answer declaration may write.
 const Set<String> _answerKeys = <String>{
@@ -320,10 +359,7 @@ void _refuseUnknownKeys(YamlMap document, _Refusals refusals) {
     final int line = _lineOf(pair.key) ?? pair.value.span.start.line;
     if (pair.key case YamlScalar(value: final String key)) {
       if (!_programKeys.contains(key)) {
-        refusals.add(
-          line,
-          'a program does not have a key "$key" — it has "name", "roles", "steps"',
-        );
+        refusals.add(line, 'a program does not have a key "$key" — it has $_programKeyList');
       }
       continue;
     }

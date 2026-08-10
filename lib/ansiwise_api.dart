@@ -73,6 +73,8 @@ export 'src/model/step_plan.dart';
 export 'src/model/step_record.dart';
 export 'src/model/step_standing.dart';
 export 'src/model/verdict.dart';
+export 'src/steps/slots.dart';
+export 'src/steps/template.dart';
 export 'src/steps/command_step.dart';
 export 'src/steps/file_step.dart';
 export 'src/steps/http_step.dart';

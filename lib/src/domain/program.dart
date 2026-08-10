@@ -20,6 +20,7 @@ final class Program {
     required this.roles,
     required this.steps,
     this.answers = DeclaredAnswers.none,
+    this.defaults = Arguments.none,
   });
 
   /// Its name, which is also the sub-command that runs it.
@@ -39,6 +40,28 @@ final class Program {
   /// Declared here rather than known by whatever starts the run, which is what lets one client
   /// stand in front of any plugin: it renders a form from this and hard-codes no field.
   final DeclaredAnswers answers;
+
+  /// Values this program gives to every step that takes them and was not given them on its own row.
+  ///
+  /// **What this is for.** Several steps of one program regularly need the same value — where the
+  /// profile of this installation stands, which key inside it holds an address, which permissions an
+  /// argument file is written with. Writing it on every row means writing it thirty times, and the
+  /// failure that follows is not the typing: it is the day one of them changes and twenty-nine rows
+  /// are edited. The thirtieth is then wrong, and nothing reports it, because a row carrying a stale
+  /// value is a valid row.
+  ///
+  /// **It is still data.** A map of names to values, resolved once against the registry before the
+  /// run begins. There is no expression in it, nothing is computed from anything, and a reader sees
+  /// the text that will be used.
+  ///
+  /// **A row always wins.** A value written on the row is what that step gets; this only fills what
+  /// the row left out. The order is therefore row, then this, then what the step itself declares as
+  /// its default — narrowest first, so nothing here can reach past a decision somebody made.
+  ///
+  /// **A name here that no step of this program declares is REFUSED**, with the program, before
+  /// anything runs. A misspelled key would otherwise sit in the file filling nothing, and the run
+  /// would go ahead on the step's own default while the file says something else.
+  final Arguments defaults;
 
   /// Whether this program may be run against a machine of [role].
   bool appliesTo(Role role) => roles.contains(role);
