@@ -209,7 +209,7 @@ final class VerifiesWhatRanBefore extends ObservingStep {
   const VerifiesWhatRanBefore();
 
   @override
-  bool get verifiesAnEarlierStep => true;
+  bool get restsOnAnEarlierStep => true;
 
   @override
   Future<CheckResult> check(StepContext context) async =>

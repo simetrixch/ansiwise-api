@@ -16,6 +16,35 @@ import 'step_context.dart';
 abstract base class Step {
   const Step._();
 
+  /// Whether what this step needs is brought about by an EARLIER STEP of the same program, rather
+  /// than being a property of the machine as it was found.
+  ///
+  /// It decides what the two modes that change nothing do with a step that cannot proceed, and the
+  /// two cases are genuinely different:
+  ///
+  /// - A step that **rests on the machine as found** answers the same in every mode. "This machine
+  ///   has four processors and the platform needs eight" is as true before a run as during one, and
+  ///   a dry run that hid it would be hiding the answer the operator came for.
+  /// - A step that **rests on an earlier step** cannot answer before that step has run. In a dry run
+  ///   nothing happened, so the file it configures does not exist and the package it verifies is not
+  ///   installed — through no fault of the machine.
+  ///
+  /// **It is on every step and not only on the gates, and that was found on a real machine.** A
+  /// program that installs something and then configures it is every deployment program there is,
+  /// and its first configuring step is blocked in a dry run for the most ordinary reason in the
+  /// world: the thing it configures is installed three steps earlier. Without this, no such program
+  /// can ever produce a green dry run — and a real run is admitted only where one did.
+  ///
+  /// So in test and dry, a step resting on an earlier one reports what it WOULD do, and one resting
+  /// on the machine reports what it found. Neither lies, and the record marks the first as declared
+  /// rather than proven. In a real run both are answered, because by then the steps they rest on
+  /// have run — which is the only mode in which the question means anything.
+  ///
+  /// The default is the machine one: a step nobody thought about is answered truthfully rather than
+  /// quietly passed over.
+  bool get restsOnAnEarlierStep => false;
+
+
   /// Whether this step's answer rests on something the program row supplied and no code chose.
   ///
   /// The case this exists for: a step that runs whatever command its row names. The row declares
@@ -121,33 +150,9 @@ abstract base class ReversibleStep<T> extends Step {
 abstract base class ObservingStep extends Step {
   /// Creates a step that only measures.
   const ObservingStep() : super._();
-
-  /// Whether this gate verifies what an earlier step did, rather than measuring the machine as it
-  /// was found.
-  ///
-  /// It decides what a dry run does with a gate that does not hold, and the two cases are genuinely
-  /// different:
-  ///
-  /// - A gate that **measures the machine as found** answers the same in every mode. "This machine
-  ///   has four processors and the platform needs eight" is as true before a run as during one, and
-  ///   a dry run that hid it would be hiding the answer the operator came for.
-  /// - A gate that **verifies an earlier step** cannot answer before that step has run. In a dry run
-  ///   nothing happened, so the key it is looking for is not there and the package it is looking for
-  ///   is not installed — through no fault of the machine. Failing there would make a dry run
-  ///   useless for every program that proves its own work, which is every program worth writing.
-  ///
-  /// So in the two modes that change nothing, a verifying gate reports what it *would* check and a
-  /// measuring gate reports what it found. Neither lies. In a real run both are answered, because by
-  /// then the steps they verify have run — which is the only mode in which the question means
-  /// anything.
-  ///
-  /// The default is the measuring one: a gate nobody thought about is answered truthfully rather
-  /// than quietly passed over.
-  bool get verifiesAnEarlierStep => false;
-
   @override
   Future<StepPlan> plan(StepContext context) async => StepPlan.nothing(
-    verifiesAnEarlierStep
+    restsOnAnEarlierStep
         ? 'would check this once the steps before it have run'
         : 'this step only measures the machine',
   );

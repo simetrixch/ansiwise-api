@@ -72,6 +72,36 @@ steps:
     on_failure: exit
 ''';
 
+    test('a row keeps its own flags when a default is folded into it', () {
+      // THE REBUILD. Folding a default means building the row again, and a field the rebuild forgets
+      // arrives as its default with nothing saying so: the file states it, the loader parses it, and
+      // the run behaves as though the line were never written. That happened to
+      // `rests_on_an_earlier_step`, and it cost an afternoon spent looking at the engine that reads
+      // the flag rather than at the copy that dropped it.
+      final ResolvedProgram program = resolve('''
+name: p
+roles: [master]
+defaults:
+  content: from the program
+steps:
+  - step: writes_a_file
+    path: /one
+    on_failure: exit
+    rests_on_an_earlier_step: true
+    undo: false
+''');
+
+      final ProgramStep row = program.steps.single.entry;
+      expect(
+        row.arguments.text('content'),
+        'from the program',
+        reason: 'the default really was folded in, so this row really was rebuilt — without that '
+            'the rest of this test passes over a row nothing touched',
+      );
+      expect(row.restsOnAnEarlierStep, isTrue);
+      expect(row.undo, isFalse, reason: 'its neighbour, so a rebuild that dropped both is caught');
+    });
+
     test('both rows carry it, and neither wrote it', () {
       final ResolvedProgram program = resolve(twoRows);
 

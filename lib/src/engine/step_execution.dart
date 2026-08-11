@@ -242,6 +242,34 @@ final class StepExecution {
     return Arguments(values);
   }
 
+  /// A step's own check, with the one thing it cannot answer turned into an answer.
+  ///
+  /// **A check that could not be PERFORMED is BLOCKED, not a crash.** A step measures the machine
+  /// with a tool, and on the machine this whole mode exists for — one where nothing has been done
+  /// yet — that tool is regularly what an earlier step installs. Reaching for it throws, and the
+  /// throw carried the step away entirely: no verdict, no plan, a run ended on a stack trace where
+  /// the truthful answer was "I cannot measure this yet, and here is what is missing".
+  ///
+  /// Blocked is exactly that answer, and it is already the verdict the rest of this method knows how
+  /// to read: a step that verifies an earlier one reports what it WOULD check, and one that measures
+  /// the machine as found reports what it found. Neither had a branch for "could not look".
+  ///
+  /// **It is caught here and in no step**, because every step has this problem and a fix repeated
+  /// fifty times is fifty chances to get it wrong. What is NOT caught here is a failure of the work
+  /// itself — this wraps the check alone.
+  ///
+  /// Found on a real machine and findable nowhere else: a fake shell answers an argv without the
+  /// executable needing to exist, so a suite is green over a program that stops at its fourth step.
+  Future<CheckResult> _checked(Step step, StepContext context) async {
+    try {
+      return await step.check(context);
+    } on Object catch (why) {
+      return CheckResult.blocked(
+        'this could not be measured: ${'$why'.split('\n').map((String l) => l.trim()).join(' ')}',
+      );
+    }
+  }
+
   Future<StepOutcome> _perform({
     required ResolvedStep resolved,
     required Step step,
@@ -250,20 +278,34 @@ final class StepExecution {
     required DateTime start,
     required int firstEvent,
   }) async {
-    final CheckResult before = await step.check(context);
+    final CheckResult before = await _checked(step, context);
 
     switch (before) {
       case Blocked(:final String reason):
-        // A gate that verifies an earlier step cannot hold in either of the two modes that change
-        // nothing, because the step it verifies has not run. It reports what it would check instead
-        // of failing on a state nobody produced — otherwise a test or a dry run of any program that
-        // proves its own work dies at the first proof.
-        if (mode != Mode.run && step is ObservingStep && step.verifiesAnEarlierStep) {
-          final StepPlan plan = await step.plan(context);
+        // A step resting on an earlier one cannot proceed in either of the two modes that change
+        // nothing, because the step it rests on has not run. It reports what it WOULD do instead of
+        // failing on a state nobody produced — otherwise a test or a dry run of any program that
+        // installs something and then configures it dies at the first configuring step, and that is
+        // every deployment program there is.
+        //
+        // ITS OWN plan() IS NOT ASKED where it cannot look. A gate composes its plan out of a fixed
+        // sentence; a step that writes composes one out of the file it is about to change — and the
+        // whole reason it is here is that the file is not there yet. Asking would fail a second
+        // time, in a place with no verdict to put it in.
+        //
+        // EITHER SIDE MAY SAY IT, and they are different statements. The step says it where it is
+        // true of every use — a gate that verifies what an earlier step did can never answer before
+        // that step has run, whatever program names it. The ROW says it where it is true of this
+        // sequence — the same writer rests on nothing when the thing it configures is already there.
+        if (mode != Mode.run &&
+            (step.restsOnAnEarlierStep || resolved.entry.restsOnAnEarlierStep)) {
+          final StepPlan plan = step is ObservingStep
+              ? await step.plan(context)
+              : const StepPlan.nothing('would do this once the steps before it have run');
           if (mode == Mode.dry) {
             _recordPlan(resolved.entry.step, plan);
           }
-          context.log.info('not checked before the steps it verifies have run: $reason');
+          context.log.info('not answered before the steps it rests on have run: $reason');
           return _finish(
             resolved: resolved,
             verdict: const Succeeded(),

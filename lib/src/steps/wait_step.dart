@@ -27,9 +27,39 @@ base mixin WaitStep on Step {
   /// Asks once. Must change nothing.
   Future<bool> holds(StepContext context);
 
+  /// Whether the wait is over, on a machine that may not carry what does the asking yet.
+  ///
+  /// **A wait is always on something an earlier step brings about**, so the tool it asks with is
+  /// regularly not on the machine when the question is first put. Letting that escape as an exception
+  /// is not a measurement: the step neither holds nor fails, it disappears — and the run stops on a
+  /// stack trace where the truthful answer was "not yet, and here is why".
+  ///
+  /// It was found the only way it could be: on a real machine carrying nothing yet. A program of
+  /// fifty-five steps stopped at the fourth, asking with a tool the third step installs — in the mode
+  /// whose whole purpose is to measure a machine before anything is done to it. No suite saw it,
+  /// because a fake shell answers an argv without needing the executable to exist.
+  ///
+  /// The absence is carried rather than swallowed: the ask returns why, and the failure at the
+  /// deadline says it instead of "did not answer in time", which would send an operator looking at a
+  /// service that was never installed.
+  ///
+  /// **It carries no state.** A step is an immutable value object with a const constructor, so the
+  /// reason is returned rather than remembered — a field here would take the const away from every
+  /// step that waits.
+  Future<({bool held, String? notAskable})> _ask(StepContext context) async {
+    try {
+      return (held: await holds(context), notAskable: null);
+    } on Object catch (why) {
+      // The WHOLE reason, with its line breaks folded, because the useful half is usually not on
+      // the first line: a failure to start a process names the error there and the command it could
+      // not start below it. Keeping only the first line drops exactly the word an operator needs.
+      return (held: false, notAskable: '$why'.split('\n').map((String l) => l.trim()).join(' '));
+    }
+  }
+
   @override
   Future<CheckResult> check(StepContext context) async =>
-      await holds(context) ? CheckResult.satisfied(waitingFor) : const CheckResult.ready();
+      (await _ask(context)).held ? CheckResult.satisfied(waitingFor) : const CheckResult.ready();
 
   @override
   Future<StepPlan> plan(StepContext context) async =>
@@ -39,11 +69,18 @@ base mixin WaitStep on Step {
   Future<void> apply(StepContext context) async {
     final DateTime giveUp = context.clock.now().add(deadline);
     while (true) {
-      if (await holds(context)) {
+      final ({bool held, String? notAskable}) asked = await _ask(context);
+      if (asked.held) {
         return;
       }
       if (!context.clock.now().isBefore(giveUp)) {
-        throw WaitedTooLong(waitingFor: waitingFor, deadline: deadline);
+        // The reason the last ask could not be put, where there was one. Without it an operator
+        // whose command name is wrong is told the service did not come up, and goes looking at a
+        // service rather than at the row.
+        throw WaitedTooLong(
+          waitingFor: asked.notAskable == null ? waitingFor : '$waitingFor — ${asked.notAskable}',
+          deadline: deadline,
+        );
       }
       await context.clock.sleep(interval);
     }

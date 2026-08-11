@@ -78,6 +78,7 @@ final class ProgramStep {
     this.reads = const <String, MeasurementName>{},
     this.when = const <PredicateName>[],
     this.undo = true,
+    this.restsOnAnEarlierStep = false,
   });
 
   /// The registered name of the step.
@@ -118,6 +119,27 @@ final class ProgramStep {
   /// few — and a program file that can express or is one expression away from being able to
   /// compute.
   final List<PredicateName> when;
+
+  /// Whether what THIS ROW needs is brought about by an earlier row of the same program.
+  ///
+  /// **A property of the sequence, not of the step.** A step that writes into a process argument
+  /// file rests on nothing when the process is already installed, and rests on the row three above
+  /// it when that row is what installs it. The same class, two programs, two truths — so the program
+  /// says it, which is also where every other fact about an order belongs.
+  ///
+  /// It decides what the two modes that change nothing do when the row cannot proceed. Without it a
+  /// dry run of any program that installs something and then configures it dies at its first
+  /// configuring step, on a machine where nothing has been installed — which is precisely the
+  /// machine a dry run is pointed at, and a real run is admitted only where a dry one came back
+  /// green.
+  ///
+  /// A step may also say it for itself, where it is true of every use: a gate that verifies what an
+  /// earlier step did can never answer before that step has run, whatever program names it. The two
+  /// are different statements and both may be made — one about the step, one about this row.
+  ///
+  /// **What it does NOT do is hide a machine's own answer.** A row that says this reports what it
+  /// WOULD do and is recorded as declared rather than proven, so the run's closing numbers carry it.
+  final bool restsOnAnEarlierStep;
 
   /// Whether this entry may be taken back when a later step ends the run.
   ///

@@ -191,6 +191,11 @@ final class ProgramResolver {
       reads: entry.reads,
       when: entry.when,
       undo: entry.undo,
+      // Every field of the row is carried, and the only thing standing between them and being
+      // silently dropped is that they are listed here. A field added to a row and forgotten in this
+      // one place reaches the resolver as its default and nothing anywhere says so: the file states
+      // it, the loader parses it, and the run behaves as though the line were not written.
+      restsOnAnEarlierStep: entry.restsOnAnEarlierStep,
     );
   }
 
