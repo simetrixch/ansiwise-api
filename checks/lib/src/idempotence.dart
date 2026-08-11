@@ -101,6 +101,10 @@ final class Idempotence {
         step,
         plausibleArguments(pair.value.arguments),
         answers: answers,
+        // A step that measures does it inside the check this runs twice, and the sink refuses a
+        // name the step's entry does not declare. Without the declaration here, every such step
+        // would read as one whose check threw — a finding about this probe rather than the step.
+        publishes: pair.value.publishes,
         fixture: fixtures[pair.key.value],
       );
     }
@@ -157,6 +161,7 @@ Future<Coverage> runTwice(
   Step step,
   Arguments arguments, {
   Arguments answers = Arguments.none,
+  List<MeasurementSpec> publishes = const <MeasurementSpec>[],
   Fixture? fixture,
 }) async {
   final FakeShell shell = FakeShell();
@@ -168,6 +173,7 @@ Future<Coverage> runTwice(
     step: name,
     arguments: arguments,
     answers: answers,
+    publishes: publishes,
     shell: shell,
     files: files,
     http: http,

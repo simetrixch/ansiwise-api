@@ -9,11 +9,17 @@ import 'arguments.dart';
 ///
 /// Every problem, never the first: an operator fixing one refusal per run is an operator running it
 /// five times to learn five things it could have been told at once.
+///
+/// [filledElsewhere] names what this check cannot see and the caller has already accounted for. One
+/// case has it: a program row saying that an argument's value is measured during the run. Such a
+/// name is not a missing value, and reporting it as one would send an operator to write a value on a
+/// row that already says where its value comes from.
 List<String> argumentProblems({
   required String where,
   required Arguments given,
   required List<ArgumentSpec> declared,
   required String noun,
+  Set<String> filledElsewhere = const <String>{},
 }) {
   final List<String> problems = <String>[];
   final Set<String> known = declared.map((ArgumentSpec s) => s.name).toSet();
@@ -23,7 +29,7 @@ List<String> argumentProblems({
     if (value == null) {
       // A default is an answer nobody had to give, so a missing value with one behind it is not a
       // missing value at all.
-      if (spec.required && !spec.hasDefault) {
+      if (spec.required && !spec.hasDefault && !filledElsewhere.contains(spec.name)) {
         problems.add('$where: needs the $noun "${spec.name}" — ${spec.describes}');
       }
       continue;

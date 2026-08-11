@@ -11,6 +11,7 @@ import '../model/run_event.dart';
 import '../model/run_record.dart';
 import '../model/step_record.dart';
 import '../model/verdict.dart';
+import 'measurements.dart';
 import 'predicate_evaluation.dart';
 import 'recording_ports.dart';
 import 'redactor.dart';
@@ -148,6 +149,10 @@ final class Runner {
       redactor: redactor,
       logLevel: logLevel,
     );
+    // One collection for the whole walk, because a value one row measures is taken by a later one.
+    // It belongs to the RUN and not to the runner: two runs of one program are two machines' worth
+    // of measurements, and a collection that outlived a run would carry one into the other.
+    final Measurements measurements = Measurements();
     final List<StepRecord> records = <StepRecord>[];
     final List<AppliedStep> applied = <AppliedStep>[];
     final List<String> issues = <String>[];
@@ -159,6 +164,7 @@ final class Runner {
         facts: facts,
         answers: answers,
         start: machine.clock.now(),
+        measurements: measurements,
       );
       records.add(outcome.record);
       if (outcome.applied case final AppliedStep entry) {

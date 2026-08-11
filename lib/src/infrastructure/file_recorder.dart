@@ -260,6 +260,10 @@ StepPlan _redactedPlan(StepPlan plan, Redactor redactor) => switch (plan) {
     body: _hidden(p.body, redactor),
   ),
   final NothingPlan p => NothingPlan(redactor.hide(p.because)),
+  // It carries argument names, measurement names and the step that produces the value — no reading
+  // off a machine. Passed through the redactor all the same: the day one of those names carries a
+  // value is the day nobody remembers that this line said it could not.
+  final NotKnownYetPlan p => NotKnownYetPlan(redactor.hide(p.because)),
 };
 
 String? _hidden(String? text, Redactor redactor) => text == null ? null : redactor.hide(text);

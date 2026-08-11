@@ -107,6 +107,11 @@ final class CollectedLog implements Logger {
 ///
 /// [Facts.none] because no predicate is evaluated here: a step that asks about one it did not have
 /// evaluated throws, which is a defect in the step and is reported as such.
+///
+/// [publishes] is what the step's registry entry declares it measures, and [measurements] is where
+/// those go. A step that measures does it inside its check, which is exactly what an audit runs — so
+/// a context with nowhere to publish would turn every such step into a failure about the probe
+/// rather than about the step. Passing a collection in is how a check reads what was published.
 StepContext probeContext({
   required StepName step,
   required Arguments arguments,
@@ -117,6 +122,8 @@ StepContext probeContext({
   required Clock clock,
   required Entropy entropy,
   required Logger log,
+  List<MeasurementSpec> publishes = const <MeasurementSpec>[],
+  Measurements? measurements,
 }) => StepContext(
   shell: shell,
   files: files,
@@ -127,6 +134,7 @@ StepContext probeContext({
   step: step,
   arguments: arguments,
   answers: answers,
+  measurements: (measurements ?? Measurements()).forStep(step, publishes),
   facts: Facts.none,
 );
 

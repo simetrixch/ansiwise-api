@@ -60,6 +60,7 @@ Registry registryOf({
       const <String, (String, Step Function(Arguments))>{},
   Map<String, Predicate> predicates = const <String, Predicate>{},
   Map<String, List<ArgumentSpec>> arguments = const <String, List<ArgumentSpec>>{},
+  Map<String, List<MeasurementSpec>> publishes = const <String, List<MeasurementSpec>>{},
 }) => Registry(
   steps: <StepName, RegisteredStep>{
     for (final MapEntry<String, (String, Step Function(Arguments))> e in steps.entries)
@@ -68,6 +69,7 @@ Registry registryOf({
         source: e.value.$1,
         create: e.value.$2,
         arguments: arguments[e.key] ?? const <ArgumentSpec>[],
+        publishes: publishes[e.key] ?? const <MeasurementSpec>[],
       ),
   },
   predicates: <PredicateName, RegisteredPredicate>{
@@ -87,11 +89,14 @@ Program programOf(
   List<(String, OnFailure, List<String>)> entries, {
   List<String> roles = const <String>['master'],
   Map<String, Arguments> arguments = const <String, Arguments>{},
+  Map<String, Map<String, MeasurementName>> reads = const <String, Map<String, MeasurementName>>{},
   DeclaredAnswers answers = DeclaredAnswers.none,
+  Arguments defaults = Arguments.none,
   Set<String> undoOff = const <String>{},
 }) => Program(
   name: ProgramName(name),
   answers: answers,
+  defaults: defaults,
   roles: roles.map(Role.new).toList(growable: false),
   steps: <ProgramStep>[
     for (final (String, OnFailure, List<String>) entry in entries)
@@ -99,6 +104,7 @@ Program programOf(
         step: StepName(entry.$1),
         onFailure: entry.$2,
         arguments: arguments[entry.$1] ?? Arguments.none,
+        reads: reads[entry.$1] ?? const <String, MeasurementName>{},
         when: entry.$3.map(PredicateName.new).toList(growable: false),
         undo: !undoOff.contains(entry.$1),
       ),

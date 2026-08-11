@@ -93,6 +93,16 @@ final class ProgramsEndpoint {
             // does not need it back, and the description travels further than the run does.
             if (spec.secret)
               'set': resolved.entry.arguments.has(spec.name)
+            // What this row will actually run with — and for a measured value that is a NAME and
+            // not a value, because the value does not exist until the row that takes it has run.
+            // Reporting the step's default instead would show a value this row never uses: the
+            // default is what lets the step be built while the program is described, nothing more.
+            else if (resolved.measurementFor(spec.name) case final MeasuredArgument measured)
+              'measured': <String, Object?>{
+                'name': measured.measurement.value,
+                'produced_by': measured.publisher.value,
+                'position': measured.position,
+              }
             else
               'value': resolved.entry.arguments.raw(spec.name) ?? spec.defaultValue,
           },

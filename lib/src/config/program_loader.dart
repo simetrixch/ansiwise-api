@@ -6,6 +6,11 @@
 /// file stand for another. A key nobody declared is refused rather than ignored — a loader that
 /// ignores what it does not know turns a typo into a setting that silently went missing.
 ///
+/// The one thing a row may name instead of writing a value is a MEASUREMENT — `{measured: <name>}`,
+/// standing for the whole of one value an earlier row takes off the machine while the run happens.
+/// It is a named slot and not an expression: it cannot stand inside a longer value, cannot be tested
+/// or combined, and the name is either published by a row of this program or the program is refused.
+///
 /// What it does not do is check a step's arguments against what that step declares. That is the
 /// resolver's job, against the registry, and doing it twice would mean two places to keep in step.
 library;
@@ -488,7 +493,7 @@ ProgramStep? _step(YamlNode node, int index, _Refusals refusals) {
   final OnFailure? onFailure = _onFailure(node, label, refusals);
   final List<PredicateName> when = _when(node, label, refusals);
   final bool undo = _undo(node, label, refusals);
-  final Arguments arguments = _arguments(node, label, refusals);
+  final _Given given = _given(node, label, refusals);
 
   if (step == null || onFailure == null) {
     return null;
@@ -496,7 +501,8 @@ ProgramStep? _step(YamlNode node, int index, _Refusals refusals) {
   return ProgramStep(
     step: step,
     onFailure: onFailure,
-    arguments: arguments,
+    arguments: given.arguments,
+    reads: given.reads,
     when: when,
     undo: undo,
   );
@@ -614,16 +620,41 @@ List<PredicateName> _when(YamlMap entry, String label, _Refusals refusals) {
   return when;
 }
 
+/// What one row gives its step: the values written out, and the ones taken from a measurement.
+///
+/// Held apart because they are different things. A value is in the file and a reader sees it; a
+/// measurement is a name standing for something the machine says while the run happens, and only the
+/// resolver can tell whether any row produces it.
+final class _Given {
+  const _Given(this.arguments, this.reads);
+
+  /// The values the row wrote out.
+  final Arguments arguments;
+
+  /// Which argument takes its value from which measurement.
+  final Map<String, MeasurementName> reads;
+}
+
 /// Everything the entry says that is not [_stepKeys], as the values the step is given.
 ///
 /// The values keep the types YAML gave them, so text stays a [String] and a whole number stays an
 /// [int]. Whether the step declares the key at all, and whether the kind is the one it declared, is
 /// checked against the registry afterwards.
-Arguments _arguments(YamlMap entry, String label, _Refusals refusals) {
+_Given _given(YamlMap entry, String label, _Refusals refusals) {
   final Map<String, Object> values = <String, Object>{};
+  final Map<String, MeasurementName> reads = <String, MeasurementName>{};
   for (final MapEntry<Object?, YamlNode> pair in entry.nodes.entries) {
     if (pair.key case YamlScalar(value: final String key)) {
       if (_stepKeys.contains(key)) {
+        continue;
+      }
+      // Asked before the value is read, because the one map an argument may hold is not a value.
+      // A key cannot carry both: the parser refuses a document that writes one key twice, so a row
+      // saying where a value comes from cannot also write the value.
+      if (_measured(pair.value, key, label, refusals) case final _Measured written) {
+        if (written.name case final MeasurementName name) {
+          reads[key] = name;
+        }
         continue;
       }
       final Object? value = _argument(pair.value, key, label, refusals);
@@ -637,7 +668,51 @@ Arguments _arguments(YamlMap entry, String label, _Refusals refusals) {
       '$label: an argument name is text, and the file gives something else',
     );
   }
-  return Arguments(values);
+  return _Given(Arguments(values), reads);
+}
+
+/// That a row wrote `{measured: <name>}` for an argument, and the name where it is one.
+///
+/// Null for the name means the shape was right and the name was not, which has already been refused
+/// — the row is still known to take a measurement there, so nothing goes on to read it as a value.
+final class _Measured {
+  const _Measured(this.name);
+
+  /// The name the row wrote, or null when it was refused.
+  final MeasurementName? name;
+}
+
+/// The measurement [node] names, or null when it is not the one map an argument may hold.
+///
+/// `{measured: host.upstream_resolvers}` and nothing else. It is a MAP rather than a marker inside
+/// text on purpose: a marker could stand in the middle of a longer value, and a value half written
+/// by the file and half by the machine is a template — which is a program file computing, one step
+/// away from being the thing that gets debugged instead of the code.
+_Measured? _measured(YamlNode node, String key, String label, _Refusals refusals) {
+  if (node is! YamlMap) {
+    return null;
+  }
+  final YamlNode? named = node.nodes['measured'];
+  if (named == null || node.nodes.length != 1) {
+    // Left to [_argument], which refuses every map and says which single one is legal.
+    return null;
+  }
+  if (named.value case final String written) {
+    if (MeasurementName.isValid(written)) {
+      return _Measured(MeasurementName(written));
+    }
+    refusals.add(
+      named.span.start.line,
+      '$label: "$key" takes "$written", and that is not a measurement name — lower case letters, '
+      'digits and underscores, in parts separated by dots',
+    );
+    return const _Measured(null);
+  }
+  refusals.add(
+    named.span.start.line,
+    '$label: "$key" takes a measurement, and its name is text — the file gives ${_kindOf(named)}',
+  );
+  return const _Measured(null);
 }
 
 /// One argument value, or null when it is of a shape no step can hold.
@@ -662,7 +737,11 @@ Object? _argument(YamlNode node, String key, String label, _Refusals refusals) {
     return whole ? texts : null;
   }
   if (node is YamlMap) {
-    refusals.add(node.span.start.line, '$label: "$key" is a map, and no argument holds a map');
+    refusals.add(
+      node.span.start.line,
+      '$label: "$key" is a map — the only map a row\'s argument holds is {measured: <name>}, which '
+      'takes the value from a measurement an earlier row of this program publishes',
+    );
     return null;
   }
   if (node.value case final Object value) {

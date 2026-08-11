@@ -6,6 +6,7 @@ import 'clock.dart';
 import 'entropy.dart';
 import 'files.dart';
 import 'http.dart';
+import 'measurement.dart';
 import 'shell.dart';
 import 'logger.dart';
 
@@ -51,6 +52,7 @@ final class StepContext extends PredicateContext {
   /// Creates the context a step runs in.
   const StepContext({
     this.answers = Arguments.none,
+    this.measurements = MeasurementSink.none,
     required super.shell,
     required super.files,
     required super.http,
@@ -82,6 +84,13 @@ final class StepContext extends PredicateContext {
   /// Substitution would mean a program file that computes, and a file that computes is a file
   /// being debugged instead of the code.
   final Arguments answers;
+
+  /// Where this step publishes what it measured, for a later row to take.
+  ///
+  /// It accepts only the names the step's registry entry declares, and it never hands anything
+  /// back: what a later row does with the value is decided by that row and by the resolver that
+  /// bound it, not by a step reaching for whatever it finds.
+  final MeasurementSink measurements;
 
   /// What the predicates found out about this machine before the run started.
   final Facts facts;

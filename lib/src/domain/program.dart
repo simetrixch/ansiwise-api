@@ -75,6 +75,7 @@ final class ProgramStep {
     required this.step,
     required this.onFailure,
     this.arguments = Arguments.none,
+    this.reads = const <String, MeasurementName>{},
     this.when = const <PredicateName>[],
     this.undo = true,
   });
@@ -91,6 +92,25 @@ final class ProgramStep {
 
   /// The values this step is given.
   final Arguments arguments;
+
+  /// Which of this step's arguments take their value from a measurement, and from which one.
+  ///
+  /// Keyed by the ARGUMENT the step declares, valued by the NAME an earlier row of this program
+  /// publishes. In a file it is written where the value would stand — `resolvers: {measured:
+  /// host.upstream_resolvers}` — so a reader sees on the row itself that this value comes off the
+  /// machine rather than out of the file.
+  ///
+  /// **A named slot and nothing more.** The row names one measurement and takes the whole of it. It
+  /// cannot be part of a larger string, cannot be tested, cannot be combined with another, and
+  /// cannot appear twice in one value. Every one of those would be an expression, and a program file
+  /// that can compute is a program file being debugged instead of the code.
+  ///
+  /// **What the resolver refuses about it**, before anything runs: an argument the step does not
+  /// declare, one that does not hold text, one declared secret, a name no row of this program
+  /// publishes, a name published by a row that runs later, a name published by a row that a
+  /// condition may skip while this row runs, and a step that cannot be built at all while the value
+  /// is missing — which is what everything examining a program before it runs has to do.
+  final Map<String, MeasurementName> reads;
 
   /// The conditions that must all hold for this step to run.
   ///

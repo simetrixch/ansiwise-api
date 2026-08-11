@@ -220,6 +220,127 @@ final class VerifiesWhatRanBefore extends ObservingStep {
       const StepPlan.nothing('would read back what the earlier step wrote');
 }
 
+/// A step that reads the machine and publishes what it read, the way a real measuring step does.
+///
+/// It measures inside its CHECK, which is where an observing step has to: its apply does nothing and
+/// is never reached once the check is satisfied. So it publishes in every mode, and what a mode that
+/// changes nothing does with the value is the engine's decision rather than this step's.
+final class MeasuresAndPublishes extends ObservingStep {
+  const MeasuresAndPublishes({required this.file, required this.publishes});
+
+  /// The file it reads the value out of.
+  final String file;
+
+  /// The name it publishes under.
+  final MeasurementName publishes;
+
+  @override
+  Future<CheckResult> check(StepContext context) async {
+    if (!await context.files.exists(file)) {
+      // Nothing read is not a value. A step answering with one here would put a sentence in the
+      // record about a machine nobody measured.
+      return CheckResult.blocked('$file could not be read, so nothing here says what it holds');
+    }
+    final String found = (await context.files.read(file)).trim();
+    context.measurements.publish(publishes, found);
+    return CheckResult.satisfied('$file says $found');
+  }
+}
+
+/// A step that publishes a name its registry entry does not declare.
+final class PublishesWhatItNeverDeclared extends ObservingStep {
+  const PublishesWhatItNeverDeclared(this.name);
+
+  final MeasurementName name;
+
+  @override
+  Future<CheckResult> check(StepContext context) async {
+    context.measurements.publish(name, 'something');
+    return const CheckResult.satisfied('published');
+  }
+}
+
+/// A step that publishes an empty reading, which is not a reading.
+final class PublishesNothing extends ObservingStep {
+  const PublishesNothing(this.name);
+
+  final MeasurementName name;
+
+  @override
+  Future<CheckResult> check(StepContext context) async {
+    context.measurements.publish(name, '');
+    return const CheckResult.satisfied('published');
+  }
+}
+
+/// A step that writes whatever its `content` argument holds, reading it as an optional one.
+///
+/// The shape a step takes when a row may fill one of its arguments from a measurement: the value is
+/// absent while the program is being examined, and the step still builds.
+final class WritesWhatItWasGiven extends ReversibleStep<String?> with FileStep {
+  WritesWhatItWasGiven({required this.path, required this.content});
+
+  factory WritesWhatItWasGiven.fromArguments(Arguments arguments) => WritesWhatItWasGiven(
+    path: arguments.text('path'),
+    content: arguments.optionalText('content') ?? '',
+  );
+
+  /// What this step accepts. `content` is not required, so the step builds while the value that
+  /// fills it does not exist yet.
+  static const List<ArgumentSpec> arguments = <ArgumentSpec>[
+    ArgumentSpec(name: 'path', kind: ArgumentKind.text, describes: 'the file it writes'),
+    ArgumentSpec(
+      name: 'content',
+      kind: ArgumentKind.text,
+      describes: 'what goes in it',
+      required: false,
+    ),
+  ];
+
+  final String path;
+
+  final String content;
+
+  @override
+  String pathFor(StepContext context) => path;
+
+  @override
+  int get mode => 0x1a4;
+
+  @override
+  Future<FileContent> contentFor(StepContext context) async => FileContent.text(content);
+
+  @override
+  Future<String?> capture(StepContext context) => contentBefore(context);
+
+  @override
+  Future<void> undo(StepContext context, String? captured) async => captured == null
+      ? context.files.delete(path)
+      : context.files.write(path, captured, mode: mode);
+}
+
+/// A step that reads its value while it is being built, so it cannot be built without one.
+final class NeedsItsValueToBeBuilt extends ObservingStep {
+  const NeedsItsValueToBeBuilt(this.content);
+
+  factory NeedsItsValueToBeBuilt.fromArguments(Arguments arguments) =>
+      NeedsItsValueToBeBuilt(arguments.text('content'));
+
+  static const List<ArgumentSpec> arguments = <ArgumentSpec>[
+    ArgumentSpec(
+      name: 'content',
+      kind: ArgumentKind.text,
+      describes: 'what it was given',
+      required: false,
+    ),
+  ];
+
+  final String content;
+
+  @override
+  Future<CheckResult> check(StepContext context) async => CheckResult.satisfied(content);
+}
+
 /// A step that changes something and THEN throws, which is the partial apply an undo exists for.
 ///
 /// The shape every real one has: it does several things and the second fails. `patch_container_

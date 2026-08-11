@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 
 import '../model/names.dart';
 import 'arguments.dart';
+import 'measurement.dart';
 import 'predicate.dart';
 import 'step.dart';
 
@@ -43,6 +44,7 @@ final class RegisteredStep {
     required this.create,
     this.arguments = const <ArgumentSpec>[],
     this.answers = const <String>[],
+    this.publishes = const <MeasurementSpec>[],
   });
 
   /// The name a program file writes.
@@ -68,6 +70,15 @@ final class RegisteredStep {
   /// never declared would fail in the middle of an installation, and the resolver refuses that
   /// combination before anything is looked at.
   final List<String> answers;
+
+  /// The values this step measures during a run and publishes for a later row to take.
+  ///
+  /// Declared here and not by the step, for the same reason the source line is: this is what the
+  /// resolver reads to answer, before anything runs, whether the name a row takes its value from is
+  /// produced anywhere in that program. A step that published without declaring would produce a
+  /// wiring no resolution could have checked, so the sink the engine hands it refuses a name that
+  /// is not here.
+  final List<MeasurementSpec> publishes;
 }
 
 /// One predicate, as the registry holds it.

@@ -132,6 +132,10 @@ final class DrySafety {
         step,
         plausibleArguments(pair.value.arguments),
         answers: answers,
+        // A step that measures does it inside the check this asks, and the sink refuses a name the
+        // step's entry does not declare. Without the declaration here every such step would come
+        // back as one whose check threw — a finding about this probe rather than about the step.
+        publishes: pair.value.publishes,
         wrapInPlanningPorts: true,
       );
     }
@@ -198,6 +202,7 @@ Future<DryRunOutcome> askWhatItWouldDo(
   Arguments arguments, {
   required bool wrapInPlanningPorts,
   Arguments answers = Arguments.none,
+  List<MeasurementSpec> publishes = const <MeasurementSpec>[],
 }) async {
   final FakeShell shell = FakeShell();
   final FakeFiles files = FakeFiles();
@@ -207,6 +212,7 @@ Future<DryRunOutcome> askWhatItWouldDo(
     step: name,
     arguments: arguments,
     answers: answers,
+    publishes: publishes,
     shell: wrapInPlanningPorts ? PlanningShell(shell, step: name) : shell,
     files: wrapInPlanningPorts ? PlanningFiles(files, step: name) : files,
     http: wrapInPlanningPorts ? PlanningHttp(http, step: name) : http,

@@ -271,6 +271,7 @@ final class RecordCodec implements RecordJson {
       if (p.body case final String body) 'body': body,
     },
     final NothingPlan p => <String, Object?>{'kind': 'nothing', 'because': p.because},
+    final NotKnownYetPlan p => <String, Object?>{'kind': 'not-known-yet', 'because': p.because},
   };
 
   /// Reads back what [stepPlan] wrote.
@@ -293,6 +294,7 @@ final class RecordCodec implements RecordJson {
         body: _optionalText(json, 'body'),
       ),
       'nothing' => NothingPlan(_text(json, 'because')),
+      'not-known-yet' => NotKnownYetPlan(_text(json, 'because')),
       _ => throw FormatException('there is no plan called "$kind"'),
     };
   }

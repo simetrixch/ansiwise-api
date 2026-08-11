@@ -400,6 +400,104 @@ steps:
     });
   });
 
+  group('an argument taking its value from a measurement', () {
+    test('the row says which argument takes which measurement', () {
+      final Program program = loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: detect_backend
+    on_failure: exit
+  - step: align_backend
+    namespace: kube-system
+    backend: {measured: host.iptables_backend}
+    on_failure: exit
+''', where: 'p.yaml');
+
+      final ProgramStep row = program.steps.last;
+      expect(row.reads, <String, MeasurementName>{
+        'backend': const MeasurementName('host.iptables_backend'),
+      });
+      expect(
+        row.arguments.has('backend'),
+        isFalse,
+        reason: 'a value the file does not hold is not among the values the file wrote',
+      );
+      expect(row.arguments.text('namespace'), 'kube-system');
+    });
+
+    test('a name of the wrong shape is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: align_backend
+    backend: {measured: Host.Backend}
+    on_failure: exit
+''', where: 'p.yaml'),
+        refusesWith(contains('takes "Host.Backend", and that is not a measurement name')),
+      );
+    });
+
+    test('a name that is not text is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: align_backend
+    backend: {measured: 7}
+    on_failure: exit
+''', where: 'p.yaml'),
+        refusesWith(contains('"backend" takes a measurement, and its name is text')),
+      );
+    });
+
+    test('a second key beside it is refused, because a slot is not an expression', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: align_backend
+    backend: {measured: host.backend, unless: something}
+    on_failure: exit
+''', where: 'p.yaml'),
+        refusesWith(contains('"backend" is a map')),
+      );
+    });
+
+    test('one inside a list is refused, so nothing can be composed out of parts', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: align_backend
+    servers: ["10.0.0.1", {measured: host.resolvers}]
+    on_failure: exit
+''', where: 'p.yaml'),
+        refusesWith(contains('the list "servers" holds text, and one entry is a map')),
+      );
+    });
+
+    test('a program-wide default cannot be one, because a default is a value', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+defaults:
+  backend: {measured: host.backend}
+steps:
+  - step: align_backend
+    on_failure: exit
+''', where: 'p.yaml'),
+        refusesWith(contains('"backend" is a map')),
+      );
+    });
+  });
+
   group('arguments', () {
     test('an argument with no value is refused', () {
       expect(
@@ -415,7 +513,7 @@ steps:
       );
     });
 
-    test('an argument holding a map is refused, because no argument kind holds one', () {
+    test('an argument holding a map is refused, and the one legal map is named', () {
       expect(
         () => loadProgram('''
 name: p
@@ -426,7 +524,12 @@ steps:
       track: "1.34"
     on_failure: exit
 ''', where: 'p.yaml'),
-        refusesWith(contains('"channel" is a map, and no argument holds a map')),
+        refusesWith(
+          allOf(
+            contains('"channel" is a map'),
+            contains("the only map a row's argument holds is {measured: <name>}"),
+          ),
+        ),
       );
     });
 

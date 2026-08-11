@@ -22,6 +22,13 @@ import '../domain/resolved_program.dart';
 ///   run of another
 /// - **whether each row may be taken back**, because a row whose undo is switched off moves the
 ///   point of no return, and the operator read that boundary off the dry run
+/// - **the WIRING of every argument whose value is measured while the run happens** — the name it
+///   takes, and the row that produces it. The value itself cannot be here: it does not exist yet
+///   when this is computed. What the material therefore states is exactly which arguments were left
+///   out and where each of them will come from, so a row rewired between two runs cannot hash like
+///   the one before it. A row is only ever bound to a measurement the resolver found an earlier row
+///   publishing, and only ever on an argument the step declares — which is what makes walking the
+///   DECLARED arguments below enough to see every wiring there is
 /// - **the commit** the branch is on, because the same program at a different commit is a different
 ///   set of steps
 ///
@@ -62,6 +69,25 @@ String fingerprintOf({
     _field(material, 'on_failure', step.entry.onFailure.name);
     _field(material, 'undo', step.entry.undo.toString());
     for (final ArgumentSpec spec in _sortedByName(step.registered.arguments)) {
+      // A value measured DURING the run cannot be in here, and what stands in its place is the
+      // WIRING: which measurement fills this argument, and which row produces it. That is what
+      // keeps two runs whose wiring differs from sharing a hash — rewiring a row to another
+      // measurement, or to the same name published by another row, writes different material.
+      // Without it the wiring would be nowhere in the material and a binary rebuilt with a row
+      // rewired would fingerprint identically.
+      //
+      // The value is NOT written beside it, not even the step's own default. That default is what
+      // makes the row examinable before the run; it is not what the step will run with, and writing
+      // it would say the gate had seen a value it never sees.
+      if (step.measurementFor(spec.name) case final MeasuredArgument measured) {
+        _field(material, 'argument.${spec.name}.measured', measured.measurement.value);
+        _field(
+          material,
+          'argument.${spec.name}.measured.from',
+          '${measured.position}:${measured.publisher.value}',
+        );
+        continue;
+      }
       final Object? given = step.entry.arguments.raw(spec.name);
       _valued(material, 'argument.${spec.name}', given ?? spec.defaultValue);
     }

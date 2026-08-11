@@ -4,7 +4,7 @@ import 'package:meta/meta.dart';
 ///
 /// Sealed with one variant per kind of change a step can make, because those are exactly the three
 /// ways out of this framework — a command, a file, a request — plus the case of a step that has
-/// nothing to do.
+/// nothing to do, and the case of a step that could not be asked at all.
 @immutable
 sealed class StepPlan {
   const StepPlan();
@@ -22,6 +22,9 @@ sealed class StepPlan {
 
   /// Nothing would change, because the machine is already in the state this step produces.
   const factory StepPlan.nothing(String because) = NothingPlan;
+
+  /// The step was not asked, because a value it is given is measured while the run happens.
+  const factory StepPlan.notKnownYet(String because) = NotKnownYetPlan;
 
   /// One line naming what would happen, for the plan the operator reads.
   String get summary;
@@ -111,4 +114,26 @@ final class NothingPlan extends StepPlan {
 
   @override
   String get summary => 'nothing to do: $because';
+}
+
+/// The step was not asked what it would do. See [StepPlan.notKnownYet].
+///
+/// **The one plan no step produces.** The engine writes it for a row whose value is measured by an
+/// earlier row while the run happens — in a test and in a dry run that row has not done its work, so
+/// the value does not exist and the step cannot be built with it. Nothing is asked, nothing is
+/// predicted, and the row says which measurement it is waiting for and which row takes it.
+///
+/// **The alternative that fails.** Asking the step with a stand-in value would produce a plan
+/// naming a file or a command that the real run need not touch, and the operator would read it as
+/// what will happen. The one thing worse than not knowing is a plan that looks like knowledge.
+@immutable
+final class NotKnownYetPlan extends StepPlan {
+  /// Creates the plan of a row whose value does not exist yet, because [because].
+  const NotKnownYetPlan(this.because);
+
+  /// Which value is missing and which row produces it, in the operator's words.
+  final String because;
+
+  @override
+  String get summary => 'not known yet: $because';
 }

@@ -16,6 +16,7 @@ import '../model/step_plan.dart';
 import '../model/step_record.dart';
 import '../model/step_standing.dart';
 import '../model/verdict.dart';
+import 'measurements.dart';
 import 'planning_ports.dart';
 import 'recording_ports.dart';
 import 'redactor.dart';
@@ -60,15 +61,25 @@ final class StepExecution {
   /// [answers] is what the operator supplied for the whole run. It is handed to every step and read
   /// BY NAME, never substituted into a step's arguments: substitution would mean a program file
   /// that computes, and a file that computes is a file being debugged instead of the code.
+  ///
+  /// [measurements] is what the steps of this run have published so far, and where this one
+  /// publishes. A row that takes a value from a measurement is filled out of it — in the mode that
+  /// changes things, which is the only mode in which the row that produces the value has done its
+  /// work.
   Future<StepOutcome> execute({
     required ResolvedStep resolved,
     required Mode mode,
     required Facts facts,
     required Arguments answers,
     required DateTime start,
+    Measurements? measurements,
   }) async {
     final StepName name = resolved.entry.step;
     final int firstEvent = recorder.nextSequence;
+    // A caller that runs one step by itself gets a collection of its own, so a step that publishes
+    // does not throw on a sink that is not there. Nothing reads it: one step is not a program, and
+    // a row taking a value is bound to a row of the same program by the resolver.
+    final Measurements taken = measurements ?? Measurements();
 
     final PredicateName? blocking = _blockedBy(resolved, facts);
     if (blocking != null) {
@@ -88,14 +99,43 @@ final class StepExecution {
           StepStarted(sequence: sequence, at: at, step: name, source: resolved.registered.source),
     );
 
+    // THE ROW WHOSE VALUE DOES NOT EXIST YET. In the two modes that change nothing, the row that
+    // measures this value has not done its work, so there is nothing to build this step with. It is
+    // not asked what it would do: a step asked with a stand-in answers about a file or a command the
+    // run need not touch, and the operator reads that as knowledge.
+    if (mode != Mode.run && resolved.measured.isNotEmpty) {
+      return _notKnownYet(resolved: resolved, mode: mode, start: start, firstEvent: firstEvent);
+    }
+
     // One set of values, used to build the step and to build its context, so that what the step
     // was constructed with and what it reads at run time cannot drift apart.
-    final Arguments arguments = _argumentsWithDefaults(
+    final Arguments withDefaults = _argumentsWithDefaults(
       resolved.registered,
       resolved.entry.arguments,
     );
+    final List<MeasuredArgument> missing = <MeasuredArgument>[
+      for (final MeasuredArgument each in resolved.measured)
+        if (taken.valueOf(each.measurement) == null) each,
+    ];
+    if (missing.isNotEmpty) {
+      // The row that produces the value did not produce it — it failed, and this program said to
+      // carry on past it. Nothing here stands in for it: this row refuses, under its own failure
+      // policy, and names the measurement that is missing and the row that owed it.
+      return _finish(
+        resolved: resolved,
+        verdict: _verdictFor(resolved.entry.onFailure, _missingSaid(missing)),
+        standing: StepStanding.declared,
+        start: start,
+        firstEvent: firstEvent,
+      );
+    }
+    final Arguments arguments = _withMeasured(resolved, withDefaults, taken);
+    if (resolved.measured.isNotEmpty) {
+      _sayWhatIsNotProven(name, _duringTheRunSaid(resolved));
+    }
+
     final Step step = resolved.registered.create(arguments);
-    final StepContext context = _contextFor(name, mode, arguments, facts, answers);
+    final StepContext context = _contextFor(name, mode, arguments, facts, answers, taken, resolved);
 
     try {
       return await _perform(
@@ -112,11 +152,94 @@ final class StepExecution {
         verdict: _verdictFor(resolved.entry.onFailure, failure.toString()),
         // A failure the framework watched happen is a measurement. What is proven here is not that
         // the step worked — the verdict says it did not — but that the row says what was seen.
-        standing: _measured(step),
+        standing: _measured(step, resolved),
         start: start,
         firstEvent: firstEvent,
       );
     }
+  }
+
+  /// Closes a row the framework did not ask, because its value is measured while the run happens.
+  ///
+  /// The verdict is success and the standing is declared, which is the same pair the gate that
+  /// verifies an earlier step ends on and for the same reason: the run carries on, and nothing here
+  /// measured anything.
+  StepOutcome _notKnownYet({
+    required ResolvedStep resolved,
+    required Mode mode,
+    required DateTime start,
+    required int firstEvent,
+  }) {
+    final StepPlan plan = StepPlan.notKnownYet(_notKnownYetSaid(resolved));
+    _sayWhatIsNotProven(resolved.entry.step, plan.summary);
+    if (mode == Mode.dry) {
+      _recordPlan(resolved.entry.step, plan);
+    }
+    return _finish(
+      resolved: resolved,
+      verdict: const Succeeded(),
+      standing: StepStanding.declared,
+      start: start,
+      firstEvent: firstEvent,
+      plan: mode == Mode.dry ? plan : null,
+    );
+  }
+
+  /// What the plan of a row whose value is not known yet says, one reading per clause.
+  String _notKnownYetSaid(ResolvedStep resolved) => <String>[
+    for (final MeasuredArgument each in resolved.measured)
+      '"${each.argument}" holds the measurement "${each.measurement}", which ${each.producedBy} '
+          'takes while the run happens',
+  ].join('; ');
+
+  /// What the record says about a row that ran on a value measured during the run.
+  String _duringTheRunSaid(ResolvedStep resolved) =>
+      '${<String>[for (final MeasuredArgument each in resolved.measured) '"${each.argument}" holds the measurement "${each.measurement}", taken by '
+            '${each.producedBy} during this run'].join('; ')} — a value measured while the run happens was not in the fingerprint the gate '
+      'spoke on, so this row is declared rather than proven';
+
+  /// What a row says when the measurement it takes was never published.
+  String _missingSaid(List<MeasuredArgument> missing) => <String>[
+    for (final MeasuredArgument each in missing)
+      'the measurement "${each.measurement}" was never published, so "${each.argument}" has no '
+          'value — ${each.producedBy} produces it, and it did not',
+  ].join('; ');
+
+  /// Writes into the record why a row is not counted among the measured ones.
+  ///
+  /// Recorded straight rather than through the step's logger, so the quietest level a run was
+  /// configured to write cannot remove it. A row standing as declared with no reason beside it is a
+  /// record that states a fact and withholds the only thing that makes it readable.
+  void _sayWhatIsNotProven(StepName step, String message) {
+    recorder.record(
+      (int sequence, DateTime at) => Log(
+        sequence: sequence,
+        at: at,
+        step: step,
+        level: LogLevel.warn,
+        message: redactor.hide(message),
+      ),
+    );
+  }
+
+  /// [given] with every measured value written into the argument that takes it.
+  ///
+  /// The measurement wins over the step's own default for that argument. The default is what makes
+  /// the row examinable before the run — it is not what the row was written to run with.
+  Arguments _withMeasured(ResolvedStep resolved, Arguments given, Measurements taken) {
+    if (resolved.measured.isEmpty) {
+      return given;
+    }
+    final Map<String, Object> values = <String, Object>{
+      for (final String name in given.names)
+        if (given.raw(name) case final Object value) name: value,
+    };
+    for (final MeasuredArgument each in resolved.measured) {
+      if (taken.valueOf(each.measurement) case final String value) {
+        values[each.argument] = value;
+      }
+    }
+    return Arguments(values);
   }
 
   Future<StepOutcome> _perform({
@@ -158,7 +281,7 @@ final class StepExecution {
           resolved: resolved,
           verdict: _verdictFor(resolved.entry.onFailure, reason),
           // The check answered, and what it answered was that a precondition does not hold.
-          standing: _measured(step),
+          standing: _measured(step, resolved),
           start: start,
           firstEvent: firstEvent,
         );
@@ -173,7 +296,7 @@ final class StepExecution {
           verdict: const Succeeded(),
           // The check read the machine and found it already in the state this step produces. That
           // is a measurement, and it is the one idempotence rests on.
-          standing: _measured(step),
+          standing: _measured(step, resolved),
           start: start,
           firstEvent: firstEvent,
           plan: mode == Mode.dry ? StepPlan.nothing(because) : null,
@@ -207,7 +330,7 @@ final class StepExecution {
           resolved: resolved,
           verdict: const Succeeded(),
           // The step's own check answered on this machine. That is everything a test claims.
-          standing: _measured(step),
+          standing: _measured(step, resolved),
           start: start,
           firstEvent: firstEvent,
         );
@@ -221,7 +344,7 @@ final class StepExecution {
           // The framework asked while the precondition held, with the planning ports around every
           // way out of this step — so whatever it reached for on the way to this answer was refused
           // rather than carried out. That is what makes the plan a measurement and not a claim.
-          standing: _measured(step),
+          standing: _measured(step, resolved),
           start: start,
           firstEvent: firstEvent,
           plan: plan,
@@ -247,7 +370,7 @@ final class StepExecution {
           return _finish(
             resolved: resolved,
             verdict: _verdictFor(resolved.entry.onFailure, failure.toString()),
-            standing: _measured(step),
+            standing: _measured(step, resolved),
             start: start,
             firstEvent: firstEvent,
             applied: _applied(resolved, step, context, captured),
@@ -266,7 +389,7 @@ final class StepExecution {
             verdict: _verdictFor(resolved.entry.onFailure, why),
             // The postcondition was read after the apply and did not hold. Measured, and the answer
             // was no.
-            standing: _measured(step),
+            standing: _measured(step, resolved),
             start: start,
             firstEvent: firstEvent,
             applied: _applied(resolved, step, context, captured),
@@ -277,7 +400,7 @@ final class StepExecution {
           verdict: const Succeeded(),
           // The postcondition was read after the apply and holds. This is the only thing in the
           // framework that turns "the step returned without throwing" into "the step worked".
-          standing: _measured(step),
+          standing: _measured(step, resolved),
           start: start,
           firstEvent: firstEvent,
           applied: _applied(resolved, step, context, captured),
@@ -292,8 +415,16 @@ final class StepExecution {
   /// row vouches for, and a measurement over an unverified instrument is the row's claim, not the
   /// framework's. The two branches that never measured — a skipped row and the verifying gate —
   /// state their own standing and do not come through here.
-  StepStanding _measured(Step step) =>
-      step.answersOnTrust ? StepStanding.declared : StepStanding.proven;
+  ///
+  /// A row that takes a value from a measurement cannot yield a proven row either, and for a
+  /// different reason: what it ran with was not in the fingerprint, because the fingerprint is built
+  /// before the first step runs. The framework did watch this row work; what it cannot say is that
+  /// the input the gate cleared is the input this row acted on. Whatever the verdict, the row is
+  /// declared — which is what makes the whole run not fully proven.
+  StepStanding _measured(Step step, ResolvedStep resolved) =>
+      step.answersOnTrust || resolved.measured.isNotEmpty
+      ? StepStanding.declared
+      : StepStanding.proven;
 
   PredicateName? _blockedBy(ResolvedStep resolved, Facts facts) {
     for (final RegisteredPredicate predicate in resolved.when) {
@@ -318,6 +449,8 @@ final class StepExecution {
     Arguments arguments,
     Facts facts,
     Arguments answers,
+    Measurements taken,
+    ResolvedStep resolved,
   ) {
     final RecordingLogger log = RecordingLogger(
       recorder: recorder,
@@ -350,6 +483,11 @@ final class StepExecution {
       step: name,
       arguments: arguments,
       answers: answers,
+      // Scoped to this step and to what its registry entry declares, in every mode. A step does not
+      // know which mode it is in and must not have to: it measures and publishes wherever it
+      // measures, and what a mode where nothing changes does with the value is decided above, by the
+      // engine, which is the only place that can know the row producing it has not run.
+      measurements: taken.forStep(name, resolved.registered.publishes),
       facts: facts,
     );
   }
