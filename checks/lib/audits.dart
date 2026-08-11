@@ -32,6 +32,7 @@
 library;
 
 export 'src/audits/case_sensitivity_audit.dart';
+export 'src/audits/composer_purity_audit.dart';
 export 'src/audits/declared_answers_audit.dart';
 export 'src/audits/declared_checks_audit.dart';
 export 'src/audits/dry_safety_audit.dart';

@@ -66,9 +66,6 @@ final class ProgramReading {
       for (final String problem in refused.problems) Finding(refused.file, problem),
   ];
 
-  /// How many files bound cleanly.
-  int get resolvedCount => outcomes.whereType<ProgramResolved>().length;
-
   /// How many steps those files name in total.
   int get stepCount => outcomes.whereType<ProgramResolved>().fold(
     0,

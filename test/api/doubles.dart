@@ -149,12 +149,6 @@ List<Object?> listAt(Map<String, Object?> map, String key) => switch (map[key]) 
   final Object? other => throw StateError('$key is $other, not a list'),
 };
 
-/// Reads [key] out of a decoded JSON object as an object.
-Map<String, Object?> mapAt(Map<String, Object?> map, String key) => switch (map[key]) {
-  final Map<String, Object?> value => value,
-  final Object? other => throw StateError('$key is $other, not an object'),
-};
-
 /// Reads one element of a decoded JSON list as an object.
 Map<String, Object?> objectAt(List<Object?> list, int index) => switch (list[index]) {
   final Map<String, Object?> value => value,

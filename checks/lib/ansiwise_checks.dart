@@ -24,6 +24,7 @@
 /// the purest form of a check that was skipped: it does not go red, it is simply absent.
 library;
 
+export 'src/composer_purity.dart';
 export 'src/config_validity.dart';
 export 'src/declared_answers.dart';
 export 'src/declared_checks.dart';
