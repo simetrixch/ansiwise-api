@@ -20,8 +20,10 @@ library;
 enum SlotKind {
   /// A slot that must hold a value from the program.
   required,
+
   /// A slot that may hold a value, and whose line is dropped if not.
   optional,
+
   /// A slot that takes a value from a previous state, never from the program.
   carried,
 }
@@ -30,10 +32,10 @@ enum SlotKind {
 class Slot {
   /// The name of the slot.
   final String name;
-  
+
   /// The kind of the slot, derived from its suffix.
   final SlotKind kind;
-  
+
   /// Creates a slot.
   const Slot(this.name, this.kind);
 
@@ -46,7 +48,12 @@ class Slot {
   int get hashCode => name.hashCode ^ kind.hashCode;
 
   /// The raw text representation of this slot, e.g. `<name?>`.
-  String get text => '<$name${kind == SlotKind.optional ? '?' : kind == SlotKind.carried ? '!' : ''}>';
+  String get text =>
+      '<$name${kind == SlotKind.optional
+          ? '?'
+          : kind == SlotKind.carried
+          ? '!'
+          : ''}>';
 }
 
 /// A slot: a lower-case name in angle brackets, possibly suffixed with ? or !, and nothing that could be an expression.
@@ -62,9 +69,9 @@ List<Slot> slotsIn(String text) {
     final SlotKind kind = suffix == '?'
         ? SlotKind.optional
         : suffix == '!'
-            ? SlotKind.carried
-            : SlotKind.required;
-    
+        ? SlotKind.carried
+        : SlotKind.required;
+
     // For slots with the same name but different suffixes (unlikely but possible), we just add them
     final String key = '$name$suffix';
     if (!seen.contains(key)) {

@@ -45,6 +45,7 @@ Arguments plausibleArguments(List<ArgumentSpec> specs) {
         (spec.allowed.isNotEmpty ? spec.allowed.first : null) ??
         switch (spec.kind) {
           ArgumentKind.text => plausibleText,
+          ArgumentKind.answerName => plausibleText,
           ArgumentKind.integer => 1,
           ArgumentKind.flag => false,
           ArgumentKind.textList => const <String>['x'],

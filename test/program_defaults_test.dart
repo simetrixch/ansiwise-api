@@ -95,7 +95,8 @@ steps:
       expect(
         row.arguments.text('content'),
         'from the program',
-        reason: 'the default really was folded in, so this row really was rebuilt — without that '
+        reason:
+            'the default really was folded in, so this row really was rebuilt — without that '
             'the rest of this test passes over a row nothing touched',
       );
       expect(row.restsOnAnEarlierStep, isTrue);

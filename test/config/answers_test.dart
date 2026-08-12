@@ -391,11 +391,7 @@ void main() {
         describes: 'the email',
         shape: 'mailbox',
       ),
-      ArgumentSpec(
-        name: 'use_db',
-        kind: ArgumentKind.flag,
-        describes: 'whether to use a db',
-      ),
+      ArgumentSpec(name: 'use_db', kind: ArgumentKind.flag, describes: 'whether to use a db'),
       ArgumentSpec(
         name: 'db_host',
         kind: ArgumentKind.text,
@@ -474,12 +470,14 @@ void main() {
 
       // Correctly provided
       expect(
-        shaped.validate(<String, Object?>{
-          'color': 'red',
-          'email': 'a@b.com',
-          'use_db': true,
-          'db_host': 'localhost',
-        }, program: 'deploy-thing').text('db_host'),
+        shaped
+            .validate(<String, Object?>{
+              'color': 'red',
+              'email': 'a@b.com',
+              'use_db': true,
+              'db_host': 'localhost',
+            }, program: 'deploy-thing')
+            .text('db_host'),
         'localhost',
       );
     });

@@ -235,7 +235,10 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
     String? shape;
     if (shapeNode != null) {
       if (resolved != ArgumentKind.text && resolved != ArgumentKind.textList) {
-        refusals.add(line, '"$name" holds ${resolved.name}, and only text or text_list may have a shape');
+        refusals.add(
+          line,
+          '"$name" holds ${resolved.name}, and only text or text_list may have a shape',
+        );
         continue;
       }
       if (shapeNode is! String || (shapeNode != 'hostname' && shapeNode != 'mailbox')) {
@@ -252,31 +255,35 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
         refusals.add(line, '"$name" has "stated_when", so it cannot be "required: true"');
         continue;
       }
-      if (statedWhenNode is! YamlMap || !statedWhenNode.containsKey('answer') || 
+      if (statedWhenNode is! YamlMap ||
+          !statedWhenNode.containsKey('answer') ||
           (statedWhenNode.containsKey('equals') == statedWhenNode.containsKey('equals_answer'))) {
-        refusals.add(line, '"$name": "stated_when" is a map with "answer" and exactly one of "equals" or "equals_answer"');
+        refusals.add(
+          line,
+          '"$name": "stated_when" is a map with "answer" and exactly one of "equals" or "equals_answer"',
+        );
         continue;
       }
       final Object? swAnswer = statedWhenNode['answer'];
       final Object? swEquals = statedWhenNode['equals'];
       final Object? swEqualsAnswer = statedWhenNode['equals_answer'];
-      
+
       if (swAnswer is! String) {
-         refusals.add(line, '"$name": "stated_when.answer" must be text');
-         continue;
+        refusals.add(line, '"$name": "stated_when.answer" must be text');
+        continue;
       }
       if (swEquals != null && swEquals is! String) {
-         refusals.add(line, '"$name": "stated_when.equals" must be text');
-         continue;
+        refusals.add(line, '"$name": "stated_when.equals" must be text');
+        continue;
       }
       if (swEqualsAnswer != null && swEqualsAnswer is! String) {
-         refusals.add(line, '"$name": "stated_when.equals_answer" must be text');
-         continue;
+        refusals.add(line, '"$name": "stated_when.equals_answer" must be text');
+        continue;
       }
       statedWhen = StatedWhen(
-        answer: swAnswer, 
-        equals: swEquals as String?, 
-        equalsAnswer: swEqualsAnswer as String?
+        answer: swAnswer,
+        equals: swEquals as String?,
+        equalsAnswer: swEqualsAnswer as String?,
       );
     }
 
@@ -329,10 +336,16 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
     final StatedWhen? trigger = spec.statedWhen;
     if (trigger != null) {
       if (!seen.contains(trigger.answer)) {
-        refusals.add(document.span.start.line, 'the answer "${trigger.answer}" named in "${spec.name}" stated_when does not exist');
+        refusals.add(
+          document.span.start.line,
+          'the answer "${trigger.answer}" named in "${spec.name}" stated_when does not exist',
+        );
       }
       if (trigger.equalsAnswer != null && !seen.contains(trigger.equalsAnswer)) {
-        refusals.add(document.span.start.line, 'the answer "${trigger.equalsAnswer}" named in "${spec.name}" stated_when does not exist');
+        refusals.add(
+          document.span.start.line,
+          'the answer "${trigger.equalsAnswer}" named in "${spec.name}" stated_when does not exist',
+        );
       }
     }
   }
@@ -614,7 +627,10 @@ bool _flag(YamlMap entry, String key, String label, _Refusals refusals) {
   if (node.value case final bool written) {
     return written;
   }
-  refusals.add(node.span.start.line, '$label: "$key" is true or false, and the file gives ${_kindOf(node)}');
+  refusals.add(
+    node.span.start.line,
+    '$label: "$key" is true or false, and the file gives ${_kindOf(node)}',
+  );
   return false;
 }
 

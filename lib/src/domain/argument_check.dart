@@ -35,7 +35,7 @@ List<String> argumentProblems({
 
   for (final ArgumentSpec spec in declared) {
     final Object? value = given.raw(spec.name);
-    
+
     final StatedWhen? trigger = spec.statedWhen;
     bool shouldBeAsked = true;
     if (trigger != null) {
@@ -54,7 +54,10 @@ List<String> argumentProblems({
     if (value == null) {
       // A default is an answer nobody had to give, so a missing value with one behind it is not a
       // missing value at all.
-      if (shouldBeAsked && spec.required && !spec.hasDefault && !filledElsewhere.contains(spec.name)) {
+      if (shouldBeAsked &&
+          spec.required &&
+          !spec.hasDefault &&
+          !filledElsewhere.contains(spec.name)) {
         problems.add('$where: needs the $noun "${spec.name}" — ${spec.describes}');
       }
       continue;
@@ -74,7 +77,9 @@ List<String> argumentProblems({
       } else if (spec.kind == ArgumentKind.textList) {
         for (final String item in value as List<String>) {
           if (!checkShape(spec.shape!, item.trim())) {
-            problems.add('$where: "${spec.name}" item "$item" is of the wrong shape (must be ${spec.shape})');
+            problems.add(
+              '$where: "${spec.name}" item "$item" is of the wrong shape (must be ${spec.shape})',
+            );
           }
         }
       }

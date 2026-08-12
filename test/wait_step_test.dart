@@ -22,7 +22,8 @@ void main() {
     expect(
       answer,
       isA<Ready>(),
-      reason: 'the tool an earlier step installs is not there yet, which is exactly the state this '
+      reason:
+          'the tool an earlier step installs is not there yet, which is exactly the state this '
           'mode is pointed at — the wait is not over, and that is a measurement rather than a crash',
     );
   });
@@ -48,7 +49,8 @@ void main() {
     expect(
       '$thrown',
       contains('no-such-executable'),
-      reason: 'told only that the thing did not come up, an operator goes looking at the thing. The '
+      reason:
+          'told only that the thing did not come up, an operator goes looking at the thing. The '
           'reason the question could not be put names the row instead',
     );
   });

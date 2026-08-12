@@ -44,7 +44,6 @@ abstract base class Step {
   /// quietly passed over.
   bool get restsOnAnEarlierStep => false;
 
-
   /// Whether this step's answer rests on something the program row supplied and no code chose.
   ///
   /// The case this exists for: a step that runs whatever command its row names. The row declares

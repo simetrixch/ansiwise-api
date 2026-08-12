@@ -6,7 +6,10 @@ void main() {
   group('what counts as a slot', () {
     test('a lower-case name in angle brackets, and nothing else', () {
       expect(slotsIn('releases/<stage>/root.yaml'), <Slot>[const Slot('stage', SlotKind.required)]);
-      expect(slotsIn('<a>/<b-2>/<a>'), <Slot>[const Slot('a', SlotKind.required), const Slot('b-2', SlotKind.required)], reason: 'each name once, in order');
+      expect(slotsIn('<a>/<b-2>/<a>'), <Slot>[
+        const Slot('a', SlotKind.required),
+        const Slot('b-2', SlotKind.required),
+      ], reason: 'each name once, in order');
       expect(
         slotsIn('<Stage> <STAGE> <under_score> <>'),
         isEmpty,

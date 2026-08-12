@@ -44,7 +44,7 @@ final class Template {
   /// Throws [TemplateRefused] naming everything the two disagree about, all of it at once.
   String filledWith(Map<String, String> values, {String? previousText}) {
     final List<Slot> named = slots;
-    
+
     final List<Slot> requiredSlots = named.where((Slot s) => s.kind == SlotKind.required).toList();
     final List<Slot> carriedSlots = named.where((Slot s) => s.kind == SlotKind.carried).toList();
 
@@ -89,7 +89,7 @@ final class Template {
     for (int i = 0; i < lines.length; i++) {
       String line = lines[i];
       final List<Slot> slotsOnLine = slotsIn(line);
-      
+
       if (slotsOnLine.isEmpty) {
         output.write(line);
         if (i < lines.length - 1) output.write('\n');
@@ -115,14 +115,16 @@ final class Template {
       }
 
       // Handle carried slots
-      final List<Slot> carriedOnLine = slotsOnLine.where((Slot s) => s.kind == SlotKind.carried).toList();
+      final List<Slot> carriedOnLine = slotsOnLine
+          .where((Slot s) => s.kind == SlotKind.carried)
+          .toList();
       if (carriedOnLine.isNotEmpty) {
         String regexStr = '^${RegExp.escape(line)}\$';
         for (final Slot s in carriedOnLine) {
           regexStr = regexStr.replaceAll(RegExp.escape(s.text), '(.*)');
         }
         final RegExp lineRegex = RegExp(regexStr);
-        
+
         RegExpMatch? match;
         for (final String prevLine in previousLines) {
           match = lineRegex.firstMatch(prevLine);
@@ -152,7 +154,8 @@ final class Template {
     return output.toString();
   }
 
-  static String _asSlots(List<String> names, {String suffix = ''}) => names.map((String name) => '<$name$suffix>').join(', ');
+  static String _asSlots(List<String> names, {String suffix = ''}) =>
+      names.map((String name) => '<$name$suffix>').join(', ');
 }
 
 /// Nothing can be rendered from a template, and this says what stands in the way.

@@ -69,6 +69,16 @@ final class ProgramResolver {
           problems.add('$where: reads the answer "$answer", and this program does not declare it');
         }
       }
+      for (final ArgumentSpec spec in registered.arguments) {
+        if (spec.kind == ArgumentKind.answerName && filled.arguments.has(spec.name)) {
+          final String answerName = filled.arguments.text(spec.name);
+          if (program.answers.named(answerName) == null) {
+            problems.add(
+              '$where: the argument "${spec.name}" names the answer "$answerName", and this program does not declare it',
+            );
+          }
+        }
+      }
       problems.addAll(
         argumentProblems(
           where: where,

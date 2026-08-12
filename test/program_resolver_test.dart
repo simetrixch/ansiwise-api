@@ -190,6 +190,29 @@ void main() {
     );
   });
 
+  test('a step reading an answer name at runtime the program does not declare is refused', () {
+    expect(
+      () => const ProgramResolver(_readsAnswerName).resolve(
+        programOf(
+          'p',
+          <(String, OnFailure, List<String>)>[('needs_an_answer_name', OnFailure.exit, <String>[])],
+          arguments: <String, Arguments>{
+            'needs_an_answer_name': const Arguments(<String, Object>{'source': 'db_password'}),
+          },
+        ),
+      ),
+      throwsA(
+        isA<ProgramInvalid>().having(
+          (ProgramInvalid p) => p.message,
+          'message',
+          contains(
+            'the argument "source" names the answer "db_password", and this program does not declare it',
+          ),
+        ),
+      ),
+    );
+  });
+
   test('a step reading an answer the program declares resolves', () {
     final ResolvedProgram resolved = const ProgramResolver(_readsTheDomain).resolve(
       programOf(
@@ -219,3 +242,22 @@ const Registry _readsTheDomain = Registry(
 );
 
 Step _aStep(Arguments arguments) => RunsACommand(argv: const <String>['true'], leaves: '/m');
+
+/// A registry holding one step, which takes an answer name as an argument.
+const Registry _readsAnswerName = Registry(
+  steps: <StepName, RegisteredStep>{
+    StepName('needs_an_answer_name'): RegisteredStep(
+      name: StepName('needs_an_answer_name'),
+      source: 'lib/src/steps/needs_an_answer_name.dart:1',
+      create: _aStep,
+      arguments: <ArgumentSpec>[
+        ArgumentSpec(
+          name: 'source',
+          kind: ArgumentKind.answerName,
+          describes: 'the answer to read',
+        ),
+      ],
+    ),
+  },
+  predicates: <PredicateName, RegisteredPredicate>{},
+);

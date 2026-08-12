@@ -13,6 +13,9 @@ enum ArgumentKind {
 
   /// A list of text values.
   textList,
+
+  /// The name of an answer.
+  answerName,
 }
 
 /// The condition that determines whether an answer must be provided.
@@ -24,11 +27,8 @@ final class StatedWhen {
   /// Declares a trigger condition for an answer.
   ///
   /// Exactly one of [equals] or [equalsAnswer] must be non-null.
-  const StatedWhen({
-    required this.answer,
-    this.equals,
-    this.equalsAnswer,
-  }) : assert((equals == null) != (equalsAnswer == null));
+  const StatedWhen({required this.answer, this.equals, this.equalsAnswer})
+    : assert((equals == null) != (equalsAnswer == null));
 
   /// The name of the other answer this one depends on.
   final String answer;
@@ -122,6 +122,7 @@ final class ArgumentSpec {
   /// operator the first when they made the second sends them looking in the wrong place.
   bool accepts(Object value) => switch (kind) {
     ArgumentKind.text => value is String,
+    ArgumentKind.answerName => value is String,
     ArgumentKind.integer => value is int,
     ArgumentKind.flag => value is bool,
     ArgumentKind.textList => value is List<String>,
