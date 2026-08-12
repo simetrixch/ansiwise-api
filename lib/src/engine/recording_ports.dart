@@ -65,9 +65,25 @@ final class RecordingShell implements Shell {
         step: step,
         exitCode: result.exitCode,
         elapsed: result.elapsed,
+        stdout: !result.ok ? _boundAndRedact(result.stdout) : null,
+        stderr: !result.ok ? _boundAndRedact(result.stderr) : null,
       ),
     );
     return result;
+  }
+
+  String? _boundAndRedact(String text) {
+    if (text.isEmpty) {
+      return null;
+    }
+    const int maxLines = 50;
+    final List<String> lines = LineSplitter.split(text).toList();
+    if (lines.length <= maxLines) {
+      return redactor.hide(lines.join('\n'));
+    }
+    final int toDrop = lines.length - maxLines;
+    final Iterable<String> tail = lines.skip(toDrop);
+    return redactor.hide('[dropped $toDrop lines of output]\n${tail.join('\n')}');
   }
 
   void _recordLines(String text, OutputStream stream) {

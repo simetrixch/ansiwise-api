@@ -26,6 +26,7 @@ final class Command {
     : workingDirectory = null,
       environment = const <String, String>{},
       observes = false,
+      elevated = false,
       timeout = null;
 
   /// Describes a command with everything about how it runs spelled out.
@@ -35,6 +36,7 @@ final class Command {
     this.workingDirectory,
     this.environment = const <String, String>{},
     this.observes = false,
+    this.elevated = false,
     this.timeout,
   });
 
@@ -43,6 +45,7 @@ final class Command {
     : workingDirectory = null,
       environment = const <String, String>{},
       observes = true,
+      elevated = false,
       timeout = null;
 
   /// What is run.
@@ -74,6 +77,9 @@ final class Command {
 
   /// How long to wait before giving up, or null to wait as long as it takes.
   final Duration? timeout;
+
+  /// Whether this command requires root privileges (will be executed with sudo).
+  final bool elevated;
 }
 
 /// What a command did.

@@ -31,6 +31,7 @@ final class Configuration {
     required this.plugins,
     this.logLevel = LogLevel.info,
     this.requireDryRun = true,
+    this.allowUnwind = true,
   });
 
   /// The name the file is looked for under, beside the programs.
@@ -56,6 +57,12 @@ final class Configuration {
   /// it may decide differently; the run that is supposed to demonstrate the chain works waives
   /// nothing.
   final bool requireDryRun;
+
+  /// Whether the engine should roll back steps when a failure happens.
+  ///
+  /// True unless `no_unwind: true` is given, in which case the framework stops on failure
+  /// leaving the machine exactly as it was, preserving evidence for debugging.
+  final bool allowUnwind;
 
   /// Reads [path] through [files].
   ///
@@ -100,6 +107,7 @@ final class Configuration {
       plugins: names,
       logLevel: _logLevel(document, path),
       requireDryRun: _requireDryRun(document, path),
+      allowUnwind: _allowUnwind(document, path),
     );
   }
 
@@ -147,5 +155,20 @@ final class Configuration {
       );
     }
     return dry;
+  }
+
+  /// Whether `no_unwind:` disables the rollback of steps after a failure.
+  static bool _allowUnwind(YamlMap document, String path) {
+    final Object? val = document['no_unwind'];
+    if (val == null) {
+      return true;
+    }
+    if (val is! bool) {
+      throw PluginRejected(
+        '$path: "no_unwind" is "$val", and it must be true or false\n'
+        'true means the engine will leave the machine exactly as it was when a failure happened',
+      );
+    }
+    return !val;
   }
 }

@@ -369,6 +369,7 @@ final class ChangesThenThrows extends ReversibleStep<String?> with FileStep {
     throw CommandFailed(
       argv: const <String>['second'],
       exitCode: 1,
+      stdout: '',
       stderr: 'the second act failed',
     );
   }

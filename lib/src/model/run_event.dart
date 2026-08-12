@@ -170,6 +170,8 @@ final class CommandFinished extends RunEvent {
     required StepName super.step,
     required this.exitCode,
     required this.elapsed,
+    this.stdout,
+    this.stderr,
   });
 
   /// What the command returned.
@@ -177,6 +179,12 @@ final class CommandFinished extends RunEvent {
 
   /// How long it took.
   final Duration elapsed;
+
+  /// The bounded, redacted standard output of the command, if it failed.
+  final String? stdout;
+
+  /// The bounded, redacted standard error of the command, if it failed.
+  final String? stderr;
 
   @override
   String get kind => 'command-finished';

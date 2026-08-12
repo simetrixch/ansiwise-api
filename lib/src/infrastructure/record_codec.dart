@@ -140,6 +140,8 @@ final class RecordCodec implements RecordJson {
         step: _step(json),
         exitCode: _number(json, 'exit_code'),
         elapsed: _span(json, 'elapsed_micros'),
+        stdout: _optionalText(json, 'stdout'),
+        stderr: _optionalText(json, 'stderr'),
       ),
       'file-written' => FileWritten(
         sequence: sequence,
@@ -333,6 +335,8 @@ final class RecordCodec implements RecordJson {
     final CommandFinished e => <String, Object?>{
       'exit_code': e.exitCode,
       'elapsed_micros': e.elapsed.inMicroseconds,
+      if (e.stdout case final String text) 'stdout': text,
+      if (e.stderr case final String text) 'stderr': text,
     },
     final FileWritten e => <String, Object?>{
       'path': e.path,

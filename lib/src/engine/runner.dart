@@ -35,6 +35,7 @@ final class Runner {
     required this.recorder,
     required this.redactor,
     this.logLevel = LogLevel.info,
+    this.allowUnwind = true,
   });
 
   /// What the program acts on.
@@ -52,6 +53,9 @@ final class Runner {
   /// It reaches every step and every unwind through here, so one run writes at one level and a
   /// reader never has to work out which part of a record was filtered and which was not.
   final LogLevel logLevel;
+
+  /// Whether the engine should roll back steps when a failure happens.
+  final bool allowUnwind;
 
   /// Runs [program] in [mode] against the machine described by [header].
   ///
@@ -88,12 +92,22 @@ final class Runner {
       final _Walk walk = await _walkSteps(program, mode, facts, answers);
 
       if (walk.ended && walk.applied.isNotEmpty) {
-        await Unwind(
-          machine: machine,
-          recorder: recorder,
-          redactor: redactor,
-          logLevel: logLevel,
-        ).undo(walk.applied, facts, answers);
+        if (allowUnwind) {
+          await Unwind(
+            machine: machine,
+            recorder: recorder,
+            redactor: redactor,
+            logLevel: logLevel,
+          ).undo(walk.applied, facts, answers);
+        } else {
+          final Logger log = RecordingLogger(
+            recorder: recorder,
+            redactor: redactor,
+            step: const StepName('unwind'),
+            threshold: logLevel,
+          );
+          log.warn('unwind was requested by failure but skipped because --no-unwind was given');
+        }
       }
 
       final int exitCode = walk.ended ? 1 : (walk.issues.isEmpty ? 0 : 2);

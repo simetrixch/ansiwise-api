@@ -94,21 +94,42 @@ final class GateNotMet extends EngineFailure {
 /// an operator reads first and having to open the record to find it is one step too many.
 final class CommandFailed extends EngineFailure {
   /// Records that [argv] returned [exitCode].
-  CommandFailed({required this.argv, required this.exitCode, required this.stderr})
-    : super(
-        stderr.trim().isEmpty
-            ? '${argv.join(' ')} returned $exitCode'
-            : '${argv.join(' ')} returned $exitCode: ${stderr.trim()}',
-      );
+  CommandFailed({
+    required this.argv,
+    required this.exitCode,
+    required String stdout,
+    required String stderr,
+  }) : super(_format(argv, exitCode, stdout, stderr));
+
+  static String _format(List<String> argv, int exitCode, String stdout, String stderr) {
+    final String out = _bound(stdout.trim());
+    final String err = _bound(stderr.trim());
+
+    final StringBuffer buffer = StringBuffer('${argv.join(' ')} returned $exitCode');
+    if (err.isNotEmpty) {
+      buffer.write('\nstderr:\n$err');
+    }
+    if (out.isNotEmpty) {
+      buffer.write('\nstdout:\n$out');
+    }
+    return buffer.toString();
+  }
+
+  static String _bound(String text) {
+    if (text.isEmpty) return '';
+    const int maxLines = 50;
+    final List<String> lines = text.split('\n');
+    if (lines.length <= maxLines) return text;
+    final int toDrop = lines.length - maxLines;
+    final Iterable<String> tail = lines.skip(toDrop);
+    return '[dropped $toDrop lines of output]\n${tail.join('\n')}';
+  }
 
   /// The command that failed.
   final List<String> argv;
 
   /// What it returned.
   final int exitCode;
-
-  /// What it wrote to standard error.
-  final String stderr;
 }
 
 /// A wait reached its deadline without what it was waiting for becoming true.

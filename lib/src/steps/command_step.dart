@@ -28,7 +28,12 @@ base mixin CommandStep on Step {
     final Command command = commandFor(context);
     final CommandResult result = await context.shell.run(command);
     if (!result.ok) {
-      throw CommandFailed(argv: command.argv, exitCode: result.exitCode, stderr: result.stderr);
+      throw CommandFailed(
+        argv: command.argv,
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      );
     }
   }
 }

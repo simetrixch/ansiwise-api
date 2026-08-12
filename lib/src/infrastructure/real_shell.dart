@@ -18,9 +18,27 @@ final class RealShell implements Shell {
   @override
   Future<CommandResult> run(Command command) async {
     final Stopwatch watch = Stopwatch()..start();
+
+    final String executable;
+    final List<String> arguments;
+
+    if (command.elevated) {
+      executable = 'sh';
+      arguments = <String>[
+        '-c',
+        'sudo --stdin --reset-timestamp --prompt="" "\$@" < ~/.sudopass',
+        '--',
+        command.executable,
+        ...command.arguments,
+      ];
+    } else {
+      executable = command.executable;
+      arguments = command.arguments;
+    }
+
     final Process process = await Process.start(
-      command.executable,
-      command.arguments,
+      executable,
+      arguments,
       workingDirectory: command.workingDirectory,
       // Added to the environment rather than replacing it: null means the parent's environment is
       // passed through unchanged, and a map is merged on top of it.
