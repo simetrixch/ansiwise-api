@@ -377,5 +377,111 @@ void main() {
         ),
       );
     });
+
+    const DeclaredAnswers shaped = DeclaredAnswers(<ArgumentSpec>[
+      ArgumentSpec(
+        name: 'color',
+        kind: ArgumentKind.text,
+        describes: 'the color',
+        denied: <String>['black', 'white'],
+      ),
+      ArgumentSpec(
+        name: 'email',
+        kind: ArgumentKind.text,
+        describes: 'the email',
+        shape: 'mailbox',
+      ),
+      ArgumentSpec(
+        name: 'use_db',
+        kind: ArgumentKind.flag,
+        describes: 'whether to use a db',
+      ),
+      ArgumentSpec(
+        name: 'db_host',
+        kind: ArgumentKind.text,
+        describes: 'the database host',
+        statedWhen: StatedWhen(answer: 'use_db', equals: 'true'),
+      ),
+    ]);
+
+    test('refuses a value on the denied list', () {
+      expect(
+        () => shaped.validate(<String, Object?>{
+          'color': 'black',
+          'email': 'a@b.com',
+          'use_db': false,
+        }, program: 'deploy-thing'),
+        throwsA(
+          isA<AnswersRejected>().having(
+            (AnswersRejected r) => r.message,
+            'message',
+            contains('must not be one of black, white'),
+          ),
+        ),
+      );
+    });
+
+    test('refuses a value with wrong shape', () {
+      expect(
+        () => shaped.validate(<String, Object?>{
+          'color': 'red',
+          'email': 'not_an_email',
+          'use_db': false,
+        }, program: 'deploy-thing'),
+        throwsA(
+          isA<AnswersRejected>().having(
+            (AnswersRejected r) => r.message,
+            'message',
+            contains('is of the wrong shape (must be mailbox)'),
+          ),
+        ),
+      );
+    });
+
+    test('validates stated_when trigger', () {
+      // Condition met, but not provided
+      expect(
+        () => shaped.validate(<String, Object?>{
+          'color': 'red',
+          'email': 'a@b.com',
+          'use_db': true,
+        }, program: 'deploy-thing'),
+        throwsA(
+          isA<AnswersRejected>().having(
+            (AnswersRejected r) => r.message,
+            'message',
+            contains('needs the answer "db_host"'),
+          ),
+        ),
+      );
+
+      // Condition not met, but provided
+      expect(
+        () => shaped.validate(<String, Object?>{
+          'color': 'red',
+          'email': 'a@b.com',
+          'use_db': false,
+          'db_host': 'localhost',
+        }, program: 'deploy-thing'),
+        throwsA(
+          isA<AnswersRejected>().having(
+            (AnswersRejected r) => r.message,
+            'message',
+            contains('is given but its trigger does not hold'),
+          ),
+        ),
+      );
+
+      // Correctly provided
+      expect(
+        shaped.validate(<String, Object?>{
+          'color': 'red',
+          'email': 'a@b.com',
+          'use_db': true,
+          'db_host': 'localhost',
+        }, program: 'deploy-thing').text('db_host'),
+        'localhost',
+      );
+    });
   });
 }

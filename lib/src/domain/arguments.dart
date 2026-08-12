@@ -15,6 +15,31 @@ enum ArgumentKind {
   textList,
 }
 
+/// The condition that determines whether an answer must be provided.
+///
+/// An answer with a condition is requested only when the [answer] holds the expected value.
+/// If the condition does not hold, the answer must not be provided, and if given, it is refused.
+@immutable
+final class StatedWhen {
+  /// Declares a trigger condition for an answer.
+  ///
+  /// Exactly one of [equals] or [equalsAnswer] must be non-null.
+  const StatedWhen({
+    required this.answer,
+    this.equals,
+    this.equalsAnswer,
+  }) : assert((equals == null) != (equalsAnswer == null));
+
+  /// The name of the other answer this one depends on.
+  final String answer;
+
+  /// The exact text value the other answer must hold.
+  final String? equals;
+
+  /// The name of a third answer whose value the other answer must match.
+  final String? equalsAnswer;
+}
+
 /// One argument a step accepts, declared by the step and checked before anything runs.
 ///
 /// This is where the safety a compiler cannot give across a configuration boundary is restored. A
@@ -32,6 +57,9 @@ final class ArgumentSpec {
     this.secret = false,
     this.defaultValue,
     this.allowed = const <String>[],
+    this.shape,
+    this.denied = const <String>[],
+    this.statedWhen,
   });
 
   /// The key a program file writes.
@@ -74,6 +102,15 @@ final class ArgumentSpec {
   /// small closed one worth writing out.
   final List<String> allowed;
 
+  /// A specific shape a text value must have, such as a hostname or a mailbox.
+  final String? shape;
+
+  /// Values this argument must never hold, even if they are of the right kind.
+  final List<String> denied;
+
+  /// The condition that dictates whether this answer should be asked at all.
+  final StatedWhen? statedWhen;
+
   /// Whether a value stands in for it when a program does not give it.
   bool get hasDefault => defaultValue != null;
 
@@ -93,7 +130,13 @@ final class ArgumentSpec {
   /// Whether [value] is one of the values this argument may hold.
   ///
   /// True where none are declared: an argument with no closed set permits anything of its kind.
-  bool permits(Object value) => allowed.isEmpty || (value is String && allowed.contains(value));
+  /// Refuses a value if it is on the denied list.
+  bool permits(Object value) {
+    if (value is String && denied.contains(value)) {
+      return false;
+    }
+    return allowed.isEmpty || (value is String && allowed.contains(value));
+  }
 }
 
 /// The values a program gave one step.

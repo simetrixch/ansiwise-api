@@ -24,12 +24,37 @@ List<String> argumentProblems({
   final List<String> problems = <String>[];
   final Set<String> known = declared.map((ArgumentSpec s) => s.name).toSet();
 
+  final RegExp hostnamePattern = RegExp(r'^[a-z0-9-]+(\.[a-z0-9-]+)+$');
+  final RegExp mailboxPattern = RegExp(r'^[^@]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+$');
+
+  bool checkShape(String shape, String text) {
+    if (shape == 'hostname') return hostnamePattern.hasMatch(text);
+    if (shape == 'mailbox') return mailboxPattern.hasMatch(text);
+    return true; // Should be prevented by loader
+  }
+
   for (final ArgumentSpec spec in declared) {
     final Object? value = given.raw(spec.name);
+    
+    final StatedWhen? trigger = spec.statedWhen;
+    bool shouldBeAsked = true;
+    if (trigger != null) {
+      final Object? triggerValue = given.raw(trigger.answer);
+      if (trigger.equals != null) {
+        shouldBeAsked = triggerValue.toString() == trigger.equals;
+      } else {
+        shouldBeAsked = triggerValue == given.raw(trigger.equalsAnswer!);
+      }
+    }
+
+    if (value != null && !shouldBeAsked) {
+      problems.add('$where: "${spec.name}" is given but its trigger does not hold');
+    }
+
     if (value == null) {
       // A default is an answer nobody had to give, so a missing value with one behind it is not a
       // missing value at all.
-      if (spec.required && !spec.hasDefault && !filledElsewhere.contains(spec.name)) {
+      if (shouldBeAsked && spec.required && !spec.hasDefault && !filledElsewhere.contains(spec.name)) {
         problems.add('$where: needs the $noun "${spec.name}" — ${spec.describes}');
       }
       continue;
@@ -40,12 +65,33 @@ List<String> argumentProblems({
       );
       continue;
     }
+
+    if (spec.shape != null) {
+      if (spec.kind == ArgumentKind.text) {
+        if (!checkShape(spec.shape!, value as String)) {
+          problems.add('$where: "${spec.name}" is of the wrong shape (must be ${spec.shape})');
+        }
+      } else if (spec.kind == ArgumentKind.textList) {
+        for (final String item in value as List<String>) {
+          if (!checkShape(spec.shape!, item.trim())) {
+            problems.add('$where: "${spec.name}" item "$item" is of the wrong shape (must be ${spec.shape})');
+          }
+        }
+      }
+    }
+
     // Asked only once the kind is right: "holds one of master, slave" said about an int would be
     // true and useless.
     if (!spec.permits(value)) {
-      problems.add(
-        '$where: "${spec.name}" holds one of ${spec.allowed.join(', ')}, and was given "$value"',
-      );
+      if (value is String && spec.denied.contains(value)) {
+        problems.add(
+          '$where: "${spec.name}" must not be one of ${spec.denied.join(', ')}, and was given "$value"',
+        );
+      } else {
+        problems.add(
+          '$where: "${spec.name}" holds one of ${spec.allowed.join(', ')}, and was given "$value"',
+        );
+      }
     }
   }
   for (final String name in given.names) {

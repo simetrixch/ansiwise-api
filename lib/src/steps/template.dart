@@ -37,25 +37,38 @@ final class Template {
   final String text;
 
   /// The slot names it carries, each named once, in the order they first appear.
-  List<String> get slots => slotsIn(text);
+  List<Slot> get slots => slotsIn(text);
 
   /// [text] with the slot named by each entry of [values] holding that entry's value.
   ///
-  /// Throws [TemplateRefused] naming everything the two disagree about, all of it at once — a
-  /// caller correcting one name per run is a caller running it five times. Both directions are
-  /// refused, and that is stricter than filling an argument on purpose: a template is a whole file
-  /// with a declared value set, so a value with no slot is a value that silently never reaches the
-  /// file, while an argument is free to use any part of what a run holds.
-  String filledWith(Map<String, String> values) {
-    final List<String> named = slots;
-    final List<String> unfilled = <String>[
-      for (final String name in named)
-        if (!values.containsKey(name)) name,
+  /// Throws [TemplateRefused] naming everything the two disagree about, all of it at once.
+  String filledWith(Map<String, String> values, {String? previousText}) {
+    final List<Slot> named = slots;
+    
+    final List<Slot> requiredSlots = named.where((Slot s) => s.kind == SlotKind.required).toList();
+    final List<Slot> carriedSlots = named.where((Slot s) => s.kind == SlotKind.carried).toList();
+
+    final List<String> carriedSupplied = <String>[
+      for (final Slot s in carriedSlots)
+        if (values.containsKey(s.name)) s.name,
     ];
+    if (carriedSupplied.isNotEmpty) {
+      throw TemplateRefused(
+        'this run holds ${_asSlots(carriedSupplied, suffix: '!')} but they are carried slots, which never take values from a run',
+      );
+    }
+
+    final List<String> unfilled = <String>[
+      for (final Slot s in requiredSlots)
+        if (!values.containsKey(s.name)) s.name,
+    ];
+
+    final Set<String> namedNames = named.map((Slot s) => s.name).toSet();
     final List<String> unplaced = <String>[
       for (final String name in values.keys)
-        if (!named.contains(name)) name,
+        if (!namedNames.contains(name)) name,
     ];
+
     if (unfilled.isNotEmpty || unplaced.isNotEmpty) {
       throw TemplateRefused(
         <String>[
@@ -69,10 +82,77 @@ final class Template {
       );
     }
 
-    return filledSlots(text, values);
+    final List<String> lines = text.split('\n');
+    final List<String> previousLines = previousText?.split('\n') ?? <String>[];
+    final StringBuffer output = StringBuffer();
+
+    for (int i = 0; i < lines.length; i++) {
+      String line = lines[i];
+      final List<Slot> slotsOnLine = slotsIn(line);
+      
+      if (slotsOnLine.isEmpty) {
+        output.write(line);
+        if (i < lines.length - 1) output.write('\n');
+        continue;
+      }
+
+      bool dropLine = false;
+
+      // Handle optional slots
+      for (final Slot s in slotsOnLine.where((Slot s) => s.kind == SlotKind.optional)) {
+        if (!values.containsKey(s.name)) {
+          dropLine = true;
+          break;
+        }
+      }
+      if (dropLine) continue;
+
+      // Replace required and optional slots first
+      for (final Slot s in slotsOnLine.where((Slot s) => s.kind != SlotKind.carried)) {
+        if (values.containsKey(s.name)) {
+          line = line.replaceAll(s.text, values[s.name]!);
+        }
+      }
+
+      // Handle carried slots
+      final List<Slot> carriedOnLine = slotsOnLine.where((Slot s) => s.kind == SlotKind.carried).toList();
+      if (carriedOnLine.isNotEmpty) {
+        String regexStr = '^${RegExp.escape(line)}\$';
+        for (final Slot s in carriedOnLine) {
+          regexStr = regexStr.replaceAll(RegExp.escape(s.text), '(.*)');
+        }
+        final RegExp lineRegex = RegExp(regexStr);
+        
+        RegExpMatch? match;
+        for (final String prevLine in previousLines) {
+          match = lineRegex.firstMatch(prevLine);
+          if (match != null) {
+            break;
+          }
+        }
+
+        if (match == null) {
+          dropLine = true;
+        } else {
+          int groupIdx = 1;
+          for (final Slot s in carriedOnLine) {
+            final String capturedValue = match.group(groupIdx)!;
+            line = line.replaceAll(s.text, capturedValue);
+            groupIdx++;
+          }
+        }
+      }
+
+      if (dropLine) continue;
+
+      output.write(line);
+      if (i < lines.length - 1) output.write('\n');
+    }
+
+    return output.toString();
   }
 
-  static String _asSlots(List<String> names) => names.map((String name) => '<$name>').join(', ');
+  static String _asSlots(List<String> names, {String suffix = ''}) => names.map((String name) => '<$name$suffix>').join(', ');
 }
 
 /// Nothing can be rendered from a template, and this says what stands in the way.
@@ -134,7 +214,7 @@ base mixin TemplateStep on FileStep {
     return Template(
       path: templatePath,
       text: await context.files.read(templatePath),
-    ).filledWith(values);
+    ).filledWith(values, previousText: await contentBefore(context));
   }
 
   @override

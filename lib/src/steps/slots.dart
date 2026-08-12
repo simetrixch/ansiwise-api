@@ -16,21 +16,67 @@
 /// its declared slot and judges nothing else.
 library;
 
-/// A slot: a lower-case name in angle brackets, and nothing that could be an expression.
-final RegExp slotPattern = RegExp('<([a-z][a-z0-9-]*)>');
+/// The types of slots a template may declare.
+enum SlotKind {
+  /// A slot that must hold a value from the program.
+  required,
+  /// A slot that may hold a value, and whose line is dropped if not.
+  optional,
+  /// A slot that takes a value from a previous state, never from the program.
+  carried,
+}
 
-/// The slot names [text] carries, each named once, in the order they first appear.
-List<String> slotsIn(String text) {
-  final List<String> found = <String>[];
+/// A parsed slot with its name and kind.
+class Slot {
+  /// The name of the slot.
+  final String name;
+  
+  /// The kind of the slot, derived from its suffix.
+  final SlotKind kind;
+  
+  /// Creates a slot.
+  const Slot(this.name, this.kind);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Slot && runtimeType == other.runtimeType && name == other.name && kind == other.kind;
+
+  @override
+  int get hashCode => name.hashCode ^ kind.hashCode;
+
+  /// The raw text representation of this slot, e.g. `<name?>`.
+  String get text => '<$name${kind == SlotKind.optional ? '?' : kind == SlotKind.carried ? '!' : ''}>';
+}
+
+/// A slot: a lower-case name in angle brackets, possibly suffixed with ? or !, and nothing that could be an expression.
+final RegExp slotPattern = RegExp(r'<([a-z][a-z0-9-]*)([?!]?)>');
+
+/// The slots [text] carries, each named once, in the order they first appear.
+List<Slot> slotsIn(String text) {
+  final List<Slot> found = <Slot>[];
+  final Set<String> seen = <String>{};
   for (final RegExpMatch match in slotPattern.allMatches(text)) {
-    if (match.group(1) case final String name when !found.contains(name)) {
-      found.add(name);
+    final String name = match.group(1)!;
+    final String suffix = match.group(2)!;
+    final SlotKind kind = suffix == '?'
+        ? SlotKind.optional
+        : suffix == '!'
+            ? SlotKind.carried
+            : SlotKind.required;
+    
+    // For slots with the same name but different suffixes (unlikely but possible), we just add them
+    final String key = '$name$suffix';
+    if (!seen.contains(key)) {
+      seen.add(key);
+      found.add(Slot(name, kind));
     }
   }
   return found;
 }
 
 /// [text] with the slot named by each entry of [values] holding that entry's value.
+/// This only replaces regular required slots. ? and ! slots need line-dropping logic and are handled in Template.
 ///
 /// A name with no slot in [text] is left for the caller to judge: an argument is free to use any
 /// part of what a run holds, while a template refuses a value with nowhere to go — that law

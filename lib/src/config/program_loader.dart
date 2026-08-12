@@ -211,6 +211,75 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
       }
     }
 
+    final Object? deniedNode = entry['denied'];
+    final List<String> denied = <String>[];
+    if (deniedNode != null) {
+      if (resolved != ArgumentKind.text) {
+        refusals.add(line, '"$name" holds ${resolved.name}, and only text may name denied values');
+        continue;
+      }
+      if (deniedNode is! YamlList || deniedNode.isEmpty) {
+        refusals.add(line, '"$name": "denied" is a non-empty list of values it must not hold');
+        continue;
+      }
+      for (final Object? each in deniedNode) {
+        if (each is! String || each.isEmpty) {
+          refusals.add(line, '"$name": "$each" is not a value to deny');
+          continue;
+        }
+        denied.add(each);
+      }
+    }
+
+    final Object? shapeNode = entry['shape'];
+    String? shape;
+    if (shapeNode != null) {
+      if (resolved != ArgumentKind.text && resolved != ArgumentKind.textList) {
+        refusals.add(line, '"$name" holds ${resolved.name}, and only text or text_list may have a shape');
+        continue;
+      }
+      if (shapeNode is! String || (shapeNode != 'hostname' && shapeNode != 'mailbox')) {
+        refusals.add(line, '"$name": "shape" is "$shapeNode", and it is hostname or mailbox');
+        continue;
+      }
+      shape = shapeNode;
+    }
+
+    final Object? statedWhenNode = entry['stated_when'];
+    StatedWhen? statedWhen;
+    if (statedWhenNode != null) {
+      if (isRequired == true) {
+        refusals.add(line, '"$name" has "stated_when", so it cannot be "required: true"');
+        continue;
+      }
+      if (statedWhenNode is! YamlMap || !statedWhenNode.containsKey('answer') || 
+          (statedWhenNode.containsKey('equals') == statedWhenNode.containsKey('equals_answer'))) {
+        refusals.add(line, '"$name": "stated_when" is a map with "answer" and exactly one of "equals" or "equals_answer"');
+        continue;
+      }
+      final Object? swAnswer = statedWhenNode['answer'];
+      final Object? swEquals = statedWhenNode['equals'];
+      final Object? swEqualsAnswer = statedWhenNode['equals_answer'];
+      
+      if (swAnswer is! String) {
+         refusals.add(line, '"$name": "stated_when.answer" must be text');
+         continue;
+      }
+      if (swEquals != null && swEquals is! String) {
+         refusals.add(line, '"$name": "stated_when.equals" must be text');
+         continue;
+      }
+      if (swEqualsAnswer != null && swEqualsAnswer is! String) {
+         refusals.add(line, '"$name": "stated_when.equals_answer" must be text');
+         continue;
+      }
+      statedWhen = StatedWhen(
+        answer: swAnswer, 
+        equals: swEquals as String?, 
+        equalsAnswer: swEqualsAnswer as String?
+      );
+    }
+
     final Object? unwrapped = fallback is YamlList
         ? <String>[for (final Object? v in fallback) '$v']
         : fallback;
@@ -248,9 +317,26 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
         secret: isSecret as bool? ?? false,
         defaultValue: unwrapped,
         allowed: allowed,
+        shape: shape,
+        denied: denied,
+        statedWhen: statedWhen,
       ),
     );
   }
+
+  // Cross-reference check: stated_when references must exist
+  for (final ArgumentSpec spec in specs) {
+    final StatedWhen? trigger = spec.statedWhen;
+    if (trigger != null) {
+      if (!seen.contains(trigger.answer)) {
+        refusals.add(document.span.start.line, 'the answer "${trigger.answer}" named in "${spec.name}" stated_when does not exist');
+      }
+      if (trigger.equalsAnswer != null && !seen.contains(trigger.equalsAnswer)) {
+        refusals.add(document.span.start.line, 'the answer "${trigger.equalsAnswer}" named in "${spec.name}" stated_when does not exist');
+      }
+    }
+  }
+
   return DeclaredAnswers(specs);
 }
 
@@ -273,6 +359,9 @@ const Set<String> _answerKeys = <String>{
   'secret',
   'default',
   'allowed',
+  'shape',
+  'denied',
+  'stated_when',
 };
 
 /// The kinds an answer may declare, as a program file writes them.
