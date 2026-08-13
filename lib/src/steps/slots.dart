@@ -57,7 +57,7 @@ class Slot {
 }
 
 /// A slot: a lower-case name in angle brackets, possibly suffixed with ? or !, and nothing that could be an expression.
-final RegExp slotPattern = RegExp(r'<([a-z][a-z0-9-]*)([?!]?)>');
+final RegExp slotPattern = RegExp(r'<([a-z][a-z0-9_-]*)([?!]?)>');
 
 /// The slots [text] carries, each named once, in the order they first appear.
 List<Slot> slotsIn(String text) {
