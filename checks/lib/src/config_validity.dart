@@ -66,11 +66,7 @@ final class ProgramReading {
       for (final String problem in refused.problems) Finding(refused.file, problem),
   ];
 
-  /// How many steps those files name in total.
-  int get stepCount => outcomes.whereType<ProgramResolved>().fold(
-    0,
-    (int total, ProgramResolved resolved) => total + resolved.steps,
-  );
+
 }
 
 /// The check itself, over a directory and a registry it is given.
