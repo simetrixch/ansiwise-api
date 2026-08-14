@@ -56,8 +56,14 @@ class Slot {
           : ''}>';
 }
 
-/// A slot: a lower-case name in angle brackets, possibly suffixed with ? or !, and nothing that could be an expression.
-final RegExp slotPattern = RegExp(r'<([a-z][a-z0-9_-]*)([?!]?)>');
+/// A slot: a lower-case name in angle brackets, possibly suffixed with ? or !, and nothing that
+/// could be an expression.
+///
+/// **The name admits letters, digits and the hyphen, and NOT the underscore.** A slot name is read
+/// by whoever writes a program row, so it reads as one word in one casing: `<upstream-servers>` and
+/// never `<upstream_servers>`. Admitting both would make two spellings of one name, and a row that
+/// picked the other one would go unfilled while looking correct.
+final RegExp slotPattern = RegExp(r'<([a-z][a-z0-9-]*)([?!]?)>');
 
 /// The slots [text] carries, each named once, in the order they first appear.
 List<Slot> slotsIn(String text) {
