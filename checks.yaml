@@ -19,6 +19,10 @@
 # The analyzer and the formatter really run over every package of this tree, and a package that
 # answered from nowhere is not counted as clean.
 analysis: test/checks/analysis_check_test.dart
+# The analyzer and the formatter find nothing to change in THIS package tree. The entry above
+# proves the gate starts them correctly; this one is the answer they give about this tree, asked
+# from the suite so a plain dart test says it too.
+tree-analysis: test/checks/analysis_test.dart
 # This framework names no platform, anywhere, with no exempt path — the line that keeps a plugin's
 # knowledge out of the thing that composes plugins.
 api-purity: test/checks/api_purity_test.dart
