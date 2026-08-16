@@ -295,6 +295,37 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
       );
     }
 
+    // `default_from:` names the answer this one falls back to where nobody supplied it. The
+    // difference from `derived:` is the trigger and nothing else, so the same refusals apply.
+    final Object? fallbackNode = entry['default_from'];
+    String? defaultFrom;
+    if (fallbackNode != null) {
+      if (resolved != ArgumentKind.text) {
+        refusals.add(line, '"$name" holds ${resolved.name}, and only text falls back to text');
+        continue;
+      }
+      if (isSecret == true) {
+        refusals.add(line, '"$name" falls back to another answer, so it is not a secret');
+        continue;
+      }
+      if (fallback != null) {
+        refusals.add(
+          line,
+          '"$name" has both a "default" and a "default_from", and two values standing in for one '
+          'absence is one of them never used',
+        );
+        continue;
+      }
+      if (fallbackNode is! String || fallbackNode.isEmpty) {
+        refusals.add(
+          line,
+          '"$name": "default_from" is the name of the answer this one falls back to',
+        );
+        continue;
+      }
+      defaultFrom = fallbackNode;
+    }
+
     // `derived:` names a rule out of the closed set, and `from:` names the answer it is worked out
     // from. Both or neither: half of it is a declaration nobody can act on.
     final Object? derivedNode = entry['derived'];
@@ -383,6 +414,7 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
         denied: denied,
         statedWhen: statedWhen,
         derivation: derivation,
+        defaultFrom: defaultFrom,
       ),
     );
   }
@@ -407,6 +439,13 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
   }
 
   for (final ArgumentSpec spec in specs) {
+    final String? fallsBackTo = spec.defaultFrom;
+    if (fallsBackTo != null && !seen.contains(fallsBackTo)) {
+      refusals.add(
+        document.span.start.line,
+        'the answer "$fallsBackTo" that "${spec.name}" falls back to does not exist',
+      );
+    }
     final Derivation? how = spec.derivation;
     if (how != null && !seen.contains(how.from)) {
       refusals.add(
@@ -443,6 +482,7 @@ const Set<String> _answerKeys = <String>{
   'stated_when',
   'derived',
   'from',
+  'default_from',
 };
 
 /// The kinds an answer may declare, as a program file writes them.

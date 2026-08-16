@@ -71,13 +71,11 @@ final class DeclaredAnswers {
     final List<String> problems = argumentProblems(
       where: program,
       given: Arguments(present),
-      // A derived answer is not one an operator can be missing, so it is held out of the check that
-      // asks whether every required answer was supplied. What it IS held to is the shape and the
-      // denied values below, once it has a value.
-      declared: <ArgumentSpec>[
-        for (final ArgumentSpec spec in specs)
-          if (!spec.isDerived) spec,
-      ],
+      // EVERY declaration, including the ones nobody supplies. Filtering them out here would also
+      // take them out of the set of names this program knows, and supplying one would then be
+      // refused as an answer nobody declared — which is a true sentence about the wrong thing. That
+      // an answer with a fallback cannot be MISSING is said where missing is decided.
+      declared: specs,
       noun: 'answer',
     );
     if (problems.isNotEmpty) {
@@ -89,7 +87,51 @@ final class DeclaredAnswers {
         if (spec.hasDefault) spec.name: spec.defaultValue!,
     });
 
-    return _derived(answered, program: program);
+    return _derived(_fallenBack(answered, program: program), program: program);
+  }
+
+  /// [answered] with every answer nobody supplied filled from the answer it falls back to.
+  ///
+  /// Runs BEFORE the derivations, so an answer may be worked out from one that fell back — the
+  /// fallback is what an operator would have typed, and a derivation reads what is there.
+  Arguments _fallenBack(Arguments answered, {required String program}) {
+    final List<String> problems = <String>[];
+    final Map<String, Object> filled = <String, Object>{};
+
+    for (final ArgumentSpec spec in specs) {
+      final String? from = spec.defaultFrom;
+      if (from == null || answered.raw(spec.name) != null) {
+        continue;
+      }
+      final ArgumentSpec? source = named(from);
+      if (source == null) {
+        problems.add(
+          '$program: "${spec.name}" falls back to "$from", and this program declares no such answer',
+        );
+        continue;
+      }
+      if (source.defaultFrom != null) {
+        problems.add(
+          '$program: "${spec.name}" falls back to "$from", which falls back in its turn — a chain '
+          'is where an order of evaluation starts to matter, and reading the file would then mean '
+          'working one out',
+        );
+        continue;
+      }
+      final Object? value = answered.raw(from);
+      if (value == null) {
+        problems.add(
+          '$program: "${spec.name}" falls back to "$from", and nothing answered that either',
+        );
+        continue;
+      }
+      filled[spec.name] = value;
+    }
+
+    if (problems.isNotEmpty) {
+      throw AnswersRejected(problems.join('\n'));
+    }
+    return answered.withDefaults(filled);
   }
 
   /// [answered] with every derived answer worked out and put beside the rest.

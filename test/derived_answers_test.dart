@@ -178,4 +178,89 @@ void main() {
       expect(nothing.validate(const <String, Object?>{}, program: 'p').names, isEmpty);
     });
   });
+
+  group('an answer that falls back to another', () {
+    ArgumentSpec fallsBack(String name, String from) => ArgumentSpec(
+      name: name,
+      kind: ArgumentKind.text,
+      describes: 'the $name',
+      required: false,
+      defaultFrom: from,
+    );
+
+    test('takes the other value where nobody supplied it', () {
+      // The case this exists for: a cluster naming which one keeps the books, where leaving it out
+      // means this one. Without it the operator types the same domain twice and the two can differ.
+      final DeclaredAnswers program = DeclaredAnswers(<ArgumentSpec>[
+        text('fqdn'),
+        fallsBack('books_cluster', 'fqdn'),
+      ]);
+
+      final Arguments answers = program.validate(<String, Object?>{
+        'fqdn': 'm1.example.com',
+      }, program: 'p');
+
+      expect(answers.text('books_cluster'), 'm1.example.com');
+    });
+
+    test('keeps what was supplied, which is the half that makes it a fallback', () {
+      final DeclaredAnswers program = DeclaredAnswers(<ArgumentSpec>[
+        text('fqdn'),
+        fallsBack('books_cluster', 'fqdn'),
+      ]);
+
+      final Arguments answers = program.validate(<String, Object?>{
+        'fqdn': 's1.example.com',
+        'books_cluster': 'm1.example.com',
+      }, program: 'p');
+
+      expect(answers.text('books_cluster'), 'm1.example.com');
+    });
+
+    test('a derivation may read one, because the fallback runs first', () {
+      // A fallback is what the operator would have typed, so what is worked out from it is worked
+      // out from an answer — not from another derivation.
+      final DeclaredAnswers program = DeclaredAnswers(<ArgumentSpec>[
+        text('fqdn'),
+        fallsBack('books_cluster', 'fqdn'),
+        derived('books_short', DerivationRule.firstDnsLabel, 'books_cluster'),
+      ]);
+
+      final Arguments answers = program.validate(<String, Object?>{
+        'fqdn': 'm1.example.com',
+      }, program: 'p');
+
+      expect(answers.text('books_short'), 'm1');
+    });
+
+    test('a chain of fallbacks is refused', () {
+      final DeclaredAnswers program = DeclaredAnswers(<ArgumentSpec>[
+        text('fqdn'),
+        fallsBack('one', 'fqdn'),
+        fallsBack('two', 'one'),
+      ]);
+
+      expect(
+        () => program.validate(<String, Object?>{'fqdn': 'm1.example.com'}, program: 'p'),
+        throwsA(isA<AnswersRejected>()),
+      );
+    });
+
+    test('a source nobody answered either is refused, not filled with nothing', () {
+      final DeclaredAnswers program = DeclaredAnswers(<ArgumentSpec>[
+        const ArgumentSpec(
+          name: 'fqdn',
+          kind: ArgumentKind.text,
+          describes: 'the domain',
+          required: false,
+        ),
+        fallsBack('books_cluster', 'fqdn'),
+      ]);
+
+      expect(
+        () => program.validate(const <String, Object?>{}, program: 'p'),
+        throwsA(isA<AnswersRejected>()),
+      );
+    });
+  });
 }

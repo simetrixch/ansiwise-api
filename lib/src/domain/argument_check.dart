@@ -60,9 +60,13 @@ List<String> argumentProblems({
     if (value == null) {
       // A default is an answer nobody had to give, so a missing value with one behind it is not a
       // missing value at all.
+      // Not missing where something stands in for it: a literal default, the value of another
+      // answer, or a rule that works it out. An answer nobody has to supply is not one an operator
+      // can have forgotten.
       if (shouldBeAsked &&
           spec.required &&
-          !spec.hasDefault &&
+          !spec.hasFallback &&
+          !spec.isDerived &&
           !filledElsewhere.contains(spec.name)) {
         problems.add('$where: needs the $noun "${spec.name}" — ${spec.describes}');
       }

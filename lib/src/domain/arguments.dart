@@ -72,6 +72,7 @@ final class ArgumentSpec {
     this.denied = const <String>[],
     this.statedWhen,
     this.derivation,
+    this.defaultFrom,
   });
 
   /// The key a program file writes.
@@ -131,6 +132,17 @@ final class ArgumentSpec {
 
   /// Whether this answer is worked out rather than supplied.
   bool get isDerived => derivation != null;
+
+  /// The name of the answer this one falls back to when nobody supplied it.
+  ///
+  /// The difference from [derivation] is the trigger and nothing else. A derived answer is worked
+  /// out ALWAYS and may never be supplied; one with a fallback is supplied where it differs and
+  /// falls back where it does not — which is how a value that is usually "the same as that one"
+  /// stops being a second field somebody can type differently.
+  final String? defaultFrom;
+
+  /// Whether a value stands in for it when nobody answered, from wherever.
+  bool get hasFallback => hasDefault || defaultFrom != null;
 
   /// Whether a value stands in for it when a program does not give it.
   bool get hasDefault => defaultValue != null;

@@ -39,7 +39,15 @@ enum DerivationRule {
   ///
   /// The zone a name sits in, which is what tells two names apart that share a fleet. A value with
   /// no dot has nothing to take off and comes back unchanged.
-  withoutFirstDnsLabel('without_first_dns_label_of', _withoutFirstDnsLabel);
+  withoutFirstDnsLabel('without_first_dns_label_of', _withoutFirstDnsLabel),
+
+  /// The value itself, unchanged.
+  ///
+  /// For the case where an answer is only ever ANOTHER answer when nobody supplied it — a cluster
+  /// naming which one keeps the books, where leaving it out means "this one". Written as a default
+  /// rather than as a derivation, it fills only what was not answered, and the two are the same rule
+  /// under two triggers: `derived` always, `default_from` where nothing was given.
+  itself('itself', _itself);
 
   /// Declares a rule under the name a program file writes.
   const DerivationRule(this.written, this._apply);
@@ -71,6 +79,8 @@ enum DerivationRule {
     for (final DerivationRule rule in values) rule.written,
   ];
 }
+
+String _itself(String source) => source;
 
 String _firstDnsLabel(String source) => source.split('.').first;
 
