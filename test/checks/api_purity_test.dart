@@ -1,4 +1,4 @@
-import 'package:ansiwise_checks/audits.dart';
+import 'package:ansiwise_checks_tree/audits.dart';
 
 /// api-purity — this framework names no platform, anywhere, with no exemption.
 ///

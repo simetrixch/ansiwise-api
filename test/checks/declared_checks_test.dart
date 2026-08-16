@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:ansiwise_checks/ansiwise_checks.dart';
+import 'package:ansiwise_checks_tree/ansiwise_checks_tree.dart';
 import 'package:test/test.dart';
 
 /// declared-checks — this package is told what it checks, and holds the disk against it.

@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-import 'package:ansiwise_checks/ansiwise_checks.dart';
+import 'package:ansiwise_checks_tree/ansiwise_checks_tree.dart';
 
 import 'framework_independence.dart';
 
@@ -57,9 +57,9 @@ void main() {
       expect(found.single.kind, 'path');
     });
 
-    test('a plugin reached through another plugin is reported, with the chain', () {
-      // Transitive is the case the ticket exists for. Naming `planted_plugin` alone would not say
-      // which of the framework's OWN dependencies to take back out.
+    test('a loop closed over TWO hops is reported, with the chain', () {
+      // Transitive is the case this exists for. Naming the far package alone would not say which of
+      // the framework's OWN dependencies to take back out.
       final List<UnhostedEdge> found = _reach(<String, String>{
         '': _manifest('ansiwise_api', <String, String>{
           'planted_unit': '\n    path: ../planted-unit',
@@ -67,17 +67,38 @@ void main() {
         '../planted-unit': _manifest('planted_unit', <String, String>{
           'planted_plugin': '\n    path: ../planted-plugin',
         }),
+        '../planted-plugin': _manifest('planted_plugin', <String, String>{
+          'ansiwise_api': '\n    path: ../ansiwise-api',
+        }),
       });
 
-      expect(found.map((UnhostedEdge each) => each.package), <String>[
+      expect(found.single.package, 'ansiwise_api');
+      expect(found.single.chain, <String>[
+        'ansiwise_api',
         'planted_unit',
         'planted_plugin',
+        'ansiwise_api',
       ]);
-      expect(found.last.chain, <String>['ansiwise_api', 'planted_unit', 'planted_plugin']);
       expect(
-        found.last.toString(),
-        contains('ansiwise_api -> planted_unit -> planted_plugin'),
-        reason: 'the finding has to say what to take out, not only what turned up',
+        found.single.toString(),
+        contains('ansiwise_api -> planted_unit -> planted_plugin -> ansiwise_api'),
+        reason: 'the finding has to say what to take out, not only that a loop exists',
+      );
+    });
+
+    test('THE INNOCENT NEIGHBOUR: a package of ours that leads nowhere is not reported', () {
+      // Without this, a check that refused every package of ours would pass every probe above and
+      // be exactly as wrong as the one it replaced. This is the case that made the rule change:
+      // something of ours, reached by the framework, that cannot be a plugin because it depends on
+      // nothing at all.
+      expect(
+        _reach(<String, String>{
+          '': _manifest('ansiwise_api', <String, String>{
+            'planted_leaf': '\n    path: ../planted-leaf',
+          }),
+          '../planted-leaf': _manifest('planted_leaf', <String, String>{}),
+        }),
+        isEmpty,
       );
     });
 
@@ -218,30 +239,29 @@ void main() {
     });
 
     test('a path is resolved against the package that declared it, not against the root', () {
-      // `path: ..` written in checks/pubspec.yaml means the repository root. Resolved against the
-      // root instead it would mean the parent of the repository, and the gate package pointing back
-      // at the framework would be reported as reaching outside.
-      expect(
-        _reach(<String, String>{
-          '': _manifest('ansiwise_api', <String, String>{}, dev: _gatePackage),
-          'checks': _manifest('ansiwise_checks', <String, String>{
-            'ansiwise_api': '\n    path: ..',
-          }),
-        }),
-        isEmpty,
-      );
+      // `path: ..` written one directory down means the repository root. Resolved against the root
+      // instead it would mean the parent of the repository, and the walk would follow the wrong
+      // tree — so this asserts WHERE it arrived, by the chain it reports.
+      final List<UnhostedEdge> found = _reach(<String, String>{
+        '': _manifest('ansiwise_api', <String, String>{}, dev: _gatePackage),
+        'checks': _manifest('ansiwise_checks', <String, String>{'ansiwise_api': '\n    path: ..'}),
+      });
+
+      expect(found.single.chain, <String>['ansiwise_api', 'ansiwise_checks', 'ansiwise_api']);
     });
 
     test('two path packages depending on each other terminate', () {
       // A cycle between units is a mistake somebody will make, and a check that hung on it would be
-      // a check nobody could run.
-      final List<UnhostedEdge> found = _reach(<String, String>{
-        '': _manifest('ansiwise_api', <String, String>{'one': '\n    path: ../one'}),
-        '../one': _manifest('one', <String, String>{'two': '\n    path: ../two'}),
-        '../two': _manifest('two', <String, String>{'one': '\n    path: ../one'}),
-      });
-
-      expect(found.map((UnhostedEdge each) => each.package), <String>['one', 'two', 'one']);
+      // a check nobody could run. Neither of the two leads back to the framework, so there is
+      // nothing to report — what is asserted here is that the walk ENDS at all.
+      expect(
+        _reach(<String, String>{
+          '': _manifest('ansiwise_api', <String, String>{'one': '\n    path: ../one'}),
+          '../one': _manifest('one', <String, String>{'two': '\n    path: ../two'}),
+          '../two': _manifest('two', <String, String>{'one': '\n    path: ../one'}),
+        }),
+        isEmpty,
+      );
     });
   });
 }

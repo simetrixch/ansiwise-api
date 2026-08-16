@@ -28,5 +28,11 @@ dev_dependencies:
   # library may not reach dart:io outside infrastructure/. A DEV dependency: it is never compiled
   # into anything and travels to no consumer, and framework-independence allows it because a sibling
   # in this repository is not something below the framework.
-  ansiwise_checks:
-    path: checks
+  # THE TREE HALF ONLY, and that is what keeps framework-independence absolute rather than
+  # qualified. This package depends on nothing of ours: it reads files. The half that drives a
+  # registry depends on THIS framework, so it stands above it and the framework never reaches it.
+  ansiwise_checks_tree:
+    git:
+      url: https://github.com/simetrixch/ansiwise-checks.git
+      ref: master
+      path: tree

@@ -1,0 +1,3 @@
+dependency_overrides:
+  ansiwise_checks_tree:
+    path: ../ansiwise-checks/tree

@@ -1,4 +1,4 @@
-import 'package:ansiwise_checks/audits.dart';
+import 'package:ansiwise_checks_tree/audits.dart';
 
 /// naming — the abolished words appear in no name of THIS repository.
 ///

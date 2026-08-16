@@ -1,6 +1,6 @@
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-import 'package:ansiwise_checks/ansiwise_checks.dart';
+import 'package:ansiwise_checks_tree/ansiwise_checks_tree.dart';
 
 /// layering — no import points outward.
 ///

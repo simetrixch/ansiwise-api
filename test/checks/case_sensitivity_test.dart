@@ -1,4 +1,4 @@
-import 'package:ansiwise_checks/audits.dart';
+import 'package:ansiwise_checks_tree/audits.dart';
 
 /// case-sensitivity — every directive of THIS repository spells the on-disk name byte for byte.
 ///

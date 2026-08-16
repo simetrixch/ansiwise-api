@@ -13,9 +13,23 @@
 /// ours is `path:` or `git:`. A dependency resolved from pub.dev therefore cannot lead anywhere
 /// this check needs to look, and stopping there loses nothing.
 ///
-/// So the rule is stated as its contrapositive, which is the form that can be measured: **every
-/// package the framework reaches from OUTSIDE this repository is hosted on pub.dev.** Anything else
-/// is something of ours, and the only things of ours below the framework are its plugins.
+/// **WHAT IS MEASURED IS THE CIRCLE, because the circle is the danger.** A plugin is a package
+/// that builds on the framework — it depends on `ansiwise_api`. So the framework depending on a
+/// plugin closes a loop, and from that moment the plugin is not optional: whoever wants the
+/// framework drags it along.
+///
+/// This used to be measured by ORIGIN instead: every package reached from outside this repository
+/// had to be hosted on pub.dev, on the reasoning that the only things of ours below the framework
+/// are its plugins. That was true while it was true, and it stopped being true the day an audit
+/// library of ours came to stand beside the framework with an empty dependency list. Such a package
+/// cannot be a plugin and cannot close a loop, and refusing it taught nobody anything.
+///
+/// So the question asked here is the one the rule's own title asks: **does this package lead back
+/// to the framework?** For every plugin the answer is unchanged.
+///
+/// **A PACKAGE THAT CANNOT BE READ IS REPORTED, not passed over.** An edge this check cannot follow
+/// is an edge whose answer is unknown, and answering "no loop" about something nobody looked at is
+/// the one thing a gate must never do.
 ///
 /// **A package inside this repository is not below the framework — it IS the framework's
 /// repository.** The gate's own audits are such a package: they walk files, so they need `dart:io`,
@@ -37,10 +51,21 @@ import 'package:yaml/yaml.dart';
 /// something on disk, and a check that read only `dependencies:` would call such a tree clean.
 typedef Manifests = ({String? pubspec, String? overrides});
 
-/// One dependency edge that leaves pub.dev.
+/// One dependency edge that closes a loop back to the framework, or that could not be read.
 final class UnhostedEdge {
   /// Records that [package] was declared as a [kind] dependency, reached along [chain].
-  const UnhostedEdge({required this.package, required this.kind, required this.chain});
+  ///
+  /// [why] says which of the two it is: a package that leads back to the framework, or one whose
+  /// own manifests could not be read from here so that nobody knows whether it does.
+  const UnhostedEdge({
+    required this.package,
+    required this.kind,
+    required this.chain,
+    this.why = 'leads back to the framework',
+  });
+
+  /// Why this edge is a finding.
+  final String why;
 
   /// The name of the package depended on.
   final String package;
@@ -57,7 +82,7 @@ final class UnhostedEdge {
   /// different answers: knowing that `planted_plugin` is in the tree does not say which of the
   /// framework's own dependencies to take back out.
   @override
-  String toString() => '$package — a $kind dependency, reached by ${chain.join(' -> ')}';
+  String toString() => '$package — a $kind dependency that $why, reached by ${chain.join(' -> ')}';
 }
 
 /// Every package [root] reaches from outside this repository that is not hosted on pub.dev, with
@@ -90,22 +115,33 @@ List<UnhostedEdge> unhostedReachOf({
         // — neither can lead to an unpublished package of this organisation.
         continue;
       }
+      if (declared.name == root) {
+        // The loop, closed. Whatever chain got here, this is the arrow that must not exist.
+        found.add(UnhostedEdge(package: declared.name, kind: declared.kind, chain: reached));
+        continue;
+      }
       final String? declaredPath = declared.path;
       final String? at = declaredPath == null
           ? null
           : p.url.normalize(p.url.join(directory, declaredPath));
-      // Inside this repository is not a finding, and is still walked. Outside is reported whether
-      // or not it can be followed.
-      if (at == null || at.startsWith('..')) {
-        found.add(UnhostedEdge(package: declared.name, kind: declared.kind, chain: reached));
-      }
-      if (at == null || !visited.add(at)) {
+      final Manifests? beyond = at == null ? null : manifestsOf(at);
+      if (beyond == null) {
+        // Not followable from here — a git dependency, or a path with nothing readable at it. What
+        // it leads to is UNKNOWN, and unknown is reported rather than assumed clean.
+        found.add(
+          UnhostedEdge(
+            package: declared.name,
+            kind: declared.kind,
+            chain: reached,
+            why: 'cannot be read from here, so whether it leads back is unknown',
+          ),
+        );
         continue;
       }
-      final Manifests? beyond = manifestsOf(at);
-      if (beyond != null) {
-        walk(beyond, at, reached);
+      if (!visited.add(at!)) {
+        continue;
       }
+      walk(beyond, at, reached);
     }
   }
 

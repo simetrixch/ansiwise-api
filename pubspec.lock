@@ -17,15 +17,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "14.1.0"
-  ansiwise_checks:
+  ansiwise_checks_tree:
     dependency: "direct dev"
     description:
-      path: checks
+      path: "../ansiwise-checks/tree"
       relative: true
     source: path
     version: "0.1.0"
   args:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: args
       sha256: d0481093c50b1da8910eb0bb301626d4d8eb7284aa739614d2b394ee09e3ea04

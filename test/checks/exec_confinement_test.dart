@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:ansiwise_checks/ansiwise_checks.dart';
+import 'package:ansiwise_checks_tree/ansiwise_checks_tree.dart';
 
 /// exec-confinement — nothing outside infrastructure/ reaches the machine directly.
 ///
