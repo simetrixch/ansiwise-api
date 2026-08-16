@@ -227,21 +227,17 @@ void main() {
     });
   });
 
-  test(
-    'the record is world-readable, which is what redaction is paying for',
-    () async {
-      final FileRecorder recorder = await open();
-      await recorder.save(header());
-      recorder.record(
-        (int s, DateTime at) =>
-            Log(sequence: s, at: at, step: step, level: LogLevel.info, message: 'x'),
-      );
-      await recorder.close();
+  test('the record is world-readable, which is what redaction is paying for', () async {
+    final FileRecorder recorder = await open();
+    await recorder.save(header());
+    recorder.record(
+      (int s, DateTime at) =>
+          Log(sequence: s, at: at, step: step, level: LogLevel.info, message: 'x'),
+    );
+    await recorder.close();
 
-      expect(Directory(directory.of(id)).statSync().mode & 511, 493, reason: '0755');
-      expect(File(directory.events(id)).statSync().mode & 511, 420, reason: '0644');
-      expect(File(directory.header(id)).statSync().mode & 511, 420, reason: '0644');
-    },
-    skip: Platform.isWindows ? 'Windows has no POSIX permission bits' : null,
-  );
+    expect(Directory(directory.of(id)).statSync().mode & 511, 493, reason: '0755');
+    expect(File(directory.events(id)).statSync().mode & 511, 420, reason: '0644');
+    expect(File(directory.header(id)).statSync().mode & 511, 420, reason: '0644');
+  }, skip: Platform.isWindows ? 'Windows has no POSIX permission bits' : null);
 }

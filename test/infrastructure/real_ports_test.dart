@@ -154,16 +154,12 @@ void main() {
       await const RealFiles().delete(p.join(temp.path, 'never-existed'));
     });
 
-    test(
-      'the permission bits are the ones asked for',
-      () async {
-        final String path = p.join(temp.path, 'private.txt');
-        await const RealFiles().write(path, 'a secret', mode: 384);
+    test('the permission bits are the ones asked for', () async {
+      final String path = p.join(temp.path, 'private.txt');
+      await const RealFiles().write(path, 'a secret', mode: 384);
 
-        expect(File(path).statSync().mode & 511, 384, reason: '0600 and nothing else');
-      },
-      skip: Platform.isWindows ? 'Windows has no POSIX permission bits' : null,
-    );
+      expect(File(path).statSync().mode & 511, 384, reason: '0600 and nothing else');
+    }, skip: Platform.isWindows ? 'Windows has no POSIX permission bits' : null);
   });
 
   group('RealHttp', () {

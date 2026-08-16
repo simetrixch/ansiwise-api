@@ -45,11 +45,9 @@ void main() {
       final Directory scratch = _scratch();
       Directory('${scratch.path}/lib').createSync(recursive: true);
       File('${scratch.path}/pubspec.yaml').writeAsStringSync('name: planted_root\n');
-      expect(
-        dartPackagesIn(scratch).map((DartPackage package) => package.name),
-        <String>['planted_root'],
-        reason: 'a one-package repository would otherwise be invisible to every check',
-      );
+      expect(dartPackagesIn(scratch).map((DartPackage package) => package.name), <String>[
+        'planted_root',
+      ], reason: 'a one-package repository would otherwise be invisible to every check');
     });
 
     test('a manifest at the root of a tree with no code is a workspace and is not one', () {
@@ -57,11 +55,9 @@ void main() {
       File('${scratch.path}/pubspec.yaml').writeAsStringSync('name: planted_workspace\n');
       Directory('${scratch.path}/member/lib').createSync(recursive: true);
       File('${scratch.path}/member/pubspec.yaml').writeAsStringSync('name: planted_member\n');
-      expect(
-        dartPackagesIn(scratch).map((DartPackage package) => package.name),
-        <String>['planted_member'],
-        reason: 'walking a workspace manifest as a package counts every member twice',
-      );
+      expect(dartPackagesIn(scratch).map((DartPackage package) => package.name), <String>[
+        'planted_member',
+      ], reason: 'walking a workspace manifest as a package counts every member twice');
     });
 
     test('a package nobody listed anywhere is still found', () {

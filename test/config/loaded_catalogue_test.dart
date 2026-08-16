@@ -64,11 +64,10 @@ steps:
     );
 
     expect(catalogue.programs, hasLength(2));
-    expect(
-      catalogue.programs.map((ResolvedProgram p) => p.declared.name.value),
-      <String>['add-node', 'deploy-cluster'],
-      reason: 'the directory is read in a stable order, whatever order the port lists it in',
-    );
+    expect(catalogue.programs.map((ResolvedProgram p) => p.declared.name.value), <String>[
+      'add-node',
+      'deploy-cluster',
+    ], reason: 'the directory is read in a stable order, whatever order the port lists it in');
   });
 
   test('a program is found by name, and an unknown name is null', () async {
