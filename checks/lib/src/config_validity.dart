@@ -65,8 +65,6 @@ final class ProgramReading {
     for (final ProgramRefused refused in outcomes.whereType<ProgramRefused>())
       for (final String problem in refused.problems) Finding(refused.file, problem),
   ];
-
-
 }
 
 /// The check itself, over a directory and a registry it is given.
