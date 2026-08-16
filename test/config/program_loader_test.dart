@@ -400,6 +400,55 @@ steps:
     });
   });
 
+  group('keep_output', () {
+    test('a row that says it carries it, and a row that does not stays quiet', () {
+      final Program program = loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    keep_output: true
+    on_failure: exit
+  - step: write_config_file
+    on_failure: exit
+''', where: 'p.yaml');
+
+      expect(program.steps.first.keepsOutput, isTrue);
+      expect(program.steps.last.keepsOutput, isFalse, reason: 'output is noise unless a row says');
+    });
+
+    test('it is a key of the row, not an argument handed to the step', () {
+      final Program program = loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    keep_output: true
+    on_failure: exit
+''', where: 'p.yaml');
+
+      expect(
+        program.steps.single.arguments.has('keep_output'),
+        isFalse,
+        reason: 'as an argument it would be refused against every step that does not declare it',
+      );
+    });
+
+    test('a value that is not true or false is refused', () {
+      expect(
+        () => loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    keep_output: always
+    on_failure: exit
+''', where: 'p.yaml'),
+        refusesWith(contains('"keep_output" is true or false, and the file gives text')),
+      );
+    });
+  });
+
   group('an argument taking its value from a measurement', () {
     test('the row says which argument takes which measurement', () {
       final Program program = loadProgram('''

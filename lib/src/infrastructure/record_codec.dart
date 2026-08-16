@@ -147,8 +147,8 @@ final class RecordCodec implements RecordJson {
         step: _step(json),
         exitCode: _number(json, 'exit_code'),
         elapsed: _span(json, 'elapsed_micros'),
-        stdout: _optionalText(json, 'stdout'),
-        stderr: _optionalText(json, 'stderr'),
+        stdoutLines: _number(json, 'stdout_lines'),
+        stderrLines: _number(json, 'stderr_lines'),
       ),
       'file-written' => FileWritten(
         sequence: sequence,
@@ -345,8 +345,11 @@ final class RecordCodec implements RecordJson {
     final CommandFinished e => <String, Object?>{
       'exit_code': e.exitCode,
       'elapsed_micros': e.elapsed.inMicroseconds,
-      if (e.stdout case final String text) 'stdout': text,
-      if (e.stderr case final String text) 'stderr': text,
+      // Always written, both of them, zeroes included. An absent count would make "this command
+      // said nothing" and "this writer did not count" the same reading, and telling those apart is
+      // what the counts are for.
+      'stdout_lines': e.stdoutLines,
+      'stderr_lines': e.stderrLines,
     },
     final FileWritten e => <String, Object?>{
       'path': e.path,

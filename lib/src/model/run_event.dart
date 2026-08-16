@@ -138,7 +138,13 @@ enum OutputStream {
   stderr,
 }
 
-/// A command wrote a line. See [RunEvent].
+/// A command wrote a line, and the record keeps it. See [RunEvent].
+///
+/// Not every command leaves these behind. Output is kept for a command that failed and for one
+/// whose program row says `keep_output` — bounded to the tail, with a line saying how much was
+/// dropped — because for those the output is the evidence. Everything else leaves only its
+/// [CommandFinished], which still counts the lines, so an unkept answer never reads as an empty
+/// one.
 @immutable
 final class Output extends RunEvent {
   /// Records one line a command wrote to [stream].
@@ -170,8 +176,8 @@ final class CommandFinished extends RunEvent {
     required StepName super.step,
     required this.exitCode,
     required this.elapsed,
-    this.stdout,
-    this.stderr,
+    required this.stdoutLines,
+    required this.stderrLines,
   });
 
   /// What the command returned.
@@ -180,11 +186,17 @@ final class CommandFinished extends RunEvent {
   /// How long it took.
   final Duration elapsed;
 
-  /// The bounded, redacted standard output of the command, if it failed.
-  final String? stdout;
+  /// How many lines the command wrote to standard output.
+  ///
+  /// Counted whether or not the lines themselves were kept. The record does not carry every
+  /// command's output — a failed command and a row that says `keep_output` leave the bounded tail
+  /// as [Output] events, everything else leaves none — so without this number a command that said
+  /// nothing and a command whose words were not kept would look identical, and a reader would take
+  /// silence for the first when it was the second.
+  final int stdoutLines;
 
-  /// The bounded, redacted standard error of the command, if it failed.
-  final String? stderr;
+  /// How many lines the command wrote to standard error. Counted as [stdoutLines] is.
+  final int stderrLines;
 
   @override
   String get kind => 'command-finished';

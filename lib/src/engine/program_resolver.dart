@@ -206,6 +206,7 @@ final class ProgramResolver {
       // one place reaches the resolver as its default and nothing anywhere says so: the file states
       // it, the loader parses it, and the run behaves as though the line were not written.
       restsOnAnEarlierStep: entry.restsOnAnEarlierStep,
+      keepsOutput: entry.keepsOutput,
     );
   }
 

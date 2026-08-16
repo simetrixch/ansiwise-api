@@ -89,6 +89,7 @@ steps:
     on_failure: exit
     rests_on_an_earlier_step: true
     undo: false
+    keep_output: true
 ''');
 
       final ProgramStep row = program.steps.single.entry;
@@ -101,6 +102,7 @@ steps:
       );
       expect(row.restsOnAnEarlierStep, isTrue);
       expect(row.undo, isFalse, reason: 'its neighbour, so a rebuild that dropped both is caught');
+      expect(row.keepsOutput, isTrue, reason: 'the third flag of the row, carried the same way');
     });
 
     test('both rows carry it, and neither wrote it', () {

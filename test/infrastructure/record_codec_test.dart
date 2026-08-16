@@ -103,10 +103,18 @@ void main() {
           step: step,
           exitCode: 137,
           elapsed: const Duration(minutes: 2, seconds: 3, microseconds: 7),
+          stdoutLines: 12,
+          stderrLines: 0,
         ),
       );
       expect(back.exitCode, 137);
       expect(back.elapsed, const Duration(minutes: 2, seconds: 3, microseconds: 7));
+      expect(back.stdoutLines, 12);
+      expect(
+        back.stderrLines,
+        0,
+        reason: 'a zero survives as a zero — absence would read as a writer that did not count',
+      );
     });
 
     test('file-written', () {

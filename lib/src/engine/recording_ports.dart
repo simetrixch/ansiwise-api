@@ -20,6 +20,12 @@ import '../model/run_event.dart';
 import 'redactor.dart';
 
 /// A shell that records every command it runs.
+///
+/// What it records of the OUTPUT is decided here and nowhere else. Output is kept when the command
+/// failed, and when the row this step runs for said `keep_output` — for those, the output is the
+/// evidence somebody will need to read. Everything else is noise the record would grow by, so it
+/// leaves only the [CommandFinished] with its exit code, its elapsed time, and a count of the lines
+/// that were not kept — the count, so an unkept answer can never be read as an empty one.
 final class RecordingShell implements Shell {
   /// Wraps [inner] so that every command reaches [recorder], attributed to [step].
   const RecordingShell(
@@ -27,6 +33,7 @@ final class RecordingShell implements Shell {
     required this.recorder,
     required this.redactor,
     required this.step,
+    this.keepsOutput = false,
   });
 
   /// The shell that actually runs the command.
@@ -40,6 +47,19 @@ final class RecordingShell implements Shell {
 
   /// The step the commands belong to.
   final StepName step;
+
+  /// Whether output is kept even for a command that succeeded.
+  ///
+  /// Carried from the program row, because whether a step's output is evidence or noise is a fact
+  /// about one program and not about the step. A failed command's output is kept either way.
+  final bool keepsOutput;
+
+  /// How many lines of one stream the record keeps of a command whose output is kept.
+  ///
+  /// The tail, because a tool says why it stopped at the end of what it wrote. A record that kept
+  /// every line of a verbose command would be a record nobody can read, and a redactor running
+  /// over megabytes.
+  static const int maxLines = 50;
 
   @override
   Future<CommandResult> run(Command command) async {
@@ -55,8 +75,10 @@ final class RecordingShell implements Shell {
 
     final CommandResult result = await inner.run(command);
 
-    _recordLines(result.stdout, OutputStream.stdout);
-    _recordLines(result.stderr, OutputStream.stderr);
+    if (!result.ok || keepsOutput) {
+      _recordLines(result.stdout, OutputStream.stdout);
+      _recordLines(result.stderr, OutputStream.stderr);
+    }
 
     recorder.record(
       (int sequence, DateTime at) => CommandFinished(
@@ -65,26 +87,14 @@ final class RecordingShell implements Shell {
         step: step,
         exitCode: result.exitCode,
         elapsed: result.elapsed,
-        stdout: !result.ok ? _boundAndRedact(result.stdout) : null,
-        stderr: !result.ok ? _boundAndRedact(result.stderr) : null,
+        stdoutLines: _lineCount(result.stdout),
+        stderrLines: _lineCount(result.stderr),
       ),
     );
     return result;
   }
 
-  String? _boundAndRedact(String text) {
-    if (text.isEmpty) {
-      return null;
-    }
-    const int maxLines = 50;
-    final List<String> lines = LineSplitter.split(text).toList();
-    if (lines.length <= maxLines) {
-      return redactor.hide(lines.join('\n'));
-    }
-    final int toDrop = lines.length - maxLines;
-    final Iterable<String> tail = lines.skip(toDrop);
-    return redactor.hide('[dropped $toDrop lines of output]\n${tail.join('\n')}');
-  }
+  int _lineCount(String text) => text.isEmpty ? 0 : LineSplitter.split(text).length;
 
   void _recordLines(String text, OutputStream stream) {
     if (text.isEmpty) {
@@ -93,17 +103,21 @@ final class RecordingShell implements Shell {
     // Split rather than record the block whole: the record is read line by line, and a client that
     // reconnected asks for everything after a sequence number, which only means something if one
     // line is one event.
-    for (final String line in LineSplitter.split(text)) {
-      recorder.record(
-        (int sequence, DateTime at) => Output(
-          sequence: sequence,
-          at: at,
-          step: step,
-          stream: stream,
-          text: redactor.hide(line),
-        ),
-      );
+    final List<String> lines = LineSplitter.split(text).toList();
+    final int toDrop = lines.length - maxLines;
+    if (toDrop > 0) {
+      _recordLine(stream, '[dropped $toDrop lines of output]');
     }
+    for (final String line in toDrop > 0 ? lines.skip(toDrop) : lines) {
+      _recordLine(stream, redactor.hide(line));
+    }
+  }
+
+  void _recordLine(OutputStream stream, String text) {
+    recorder.record(
+      (int sequence, DateTime at) =>
+          Output(sequence: sequence, at: at, step: step, stream: stream, text: text),
+    );
   }
 }
 

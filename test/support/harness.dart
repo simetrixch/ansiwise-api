@@ -93,6 +93,7 @@ Program programOf(
   DeclaredAnswers answers = DeclaredAnswers.none,
   Arguments defaults = Arguments.none,
   Set<String> undoOff = const <String>{},
+  Set<String> keepOutput = const <String>{},
 }) => Program(
   name: ProgramName(name),
   answers: answers,
@@ -107,6 +108,7 @@ Program programOf(
         reads: reads[entry.$1] ?? const <String, MeasurementName>{},
         when: entry.$3.map(PredicateName.new).toList(growable: false),
         undo: !undoOff.contains(entry.$1),
+        keepsOutput: keepOutput.contains(entry.$1),
       ),
   ],
 );

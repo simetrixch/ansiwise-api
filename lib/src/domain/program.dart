@@ -79,6 +79,7 @@ final class ProgramStep {
     this.when = const <PredicateName>[],
     this.undo = true,
     this.restsOnAnEarlierStep = false,
+    this.keepsOutput = false,
   });
 
   /// The registered name of the step.
@@ -156,4 +157,21 @@ final class ProgramStep {
   /// what the run cannot take back, so it moves the point of no return exactly as an irreversible
   /// step does — and an operator reads that boundary before deciding to start.
   final bool undo;
+
+  /// Whether the record keeps what this row's commands said even when they succeeded.
+  ///
+  /// Without it, output is kept only for a command that failed. That default exists because most
+  /// output is noise, and a record that keeps every line of every command is a record nobody can
+  /// read. But for some rows the output IS the evidence: a release tool that reports what it
+  /// installed, a gate whose answer says why it decided. A command of such a row can exit zero and
+  /// still be the thing somebody has to read afterwards, and by then it is too late to ask for it.
+  ///
+  /// **A property of the row, not of the step**, for the same reason [undo] is: the same step's
+  /// output is evidence in one program and noise in another, and the program file is where that
+  /// judgement about one installation belongs.
+  ///
+  /// What is kept is bounded and redacted exactly as a failed command's output is — the tail, with
+  /// a line saying how much was dropped — so saying yes here cannot make the record unreadable and
+  /// cannot let a secret through.
+  final bool keepsOutput;
 }

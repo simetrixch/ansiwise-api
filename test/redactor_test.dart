@@ -59,11 +59,14 @@ void main() {
       final Harness h = Harness(secrets: <String>['s3cret-value-here']);
       h.shell.answers('cat /etc/app/credentials', 'value: s3cret-value-here\nlease: 1h');
 
+      // The command succeeds, so its output reaches the record only because the row asked — which
+      // makes this the exact path a secret would ride into a world-readable file on.
       final RecordingShell shell = RecordingShell(
         h.shell,
         recorder: h.recorder,
         redactor: h.redactor,
         step: const StepName('reads'),
+        keepsOutput: true,
       );
       await shell.run(const Command('cat', <String>['/etc/app/credentials']));
 

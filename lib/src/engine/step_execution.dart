@@ -501,7 +501,13 @@ final class StepExecution {
       threshold: logLevel,
     );
     final Machine recording = Machine(
-      shell: RecordingShell(machine.shell, recorder: recorder, redactor: redactor, step: name),
+      shell: RecordingShell(
+        machine.shell,
+        recorder: recorder,
+        redactor: redactor,
+        step: name,
+        keepsOutput: resolved.entry.keepsOutput,
+      ),
       files: RecordingFiles(machine.files, recorder: recorder, step: name),
       http: RecordingHttp(machine.http, recorder: recorder, redactor: redactor, step: name),
       clock: machine.clock,
@@ -547,6 +553,7 @@ final class StepExecution {
         arguments: context.arguments,
         captured: captured,
         undo: resolved.entry.undo,
+        keepsOutput: resolved.entry.keepsOutput,
       );
 
   /// The verdict of a step that failed under [policy].

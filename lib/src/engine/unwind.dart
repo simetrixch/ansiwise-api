@@ -88,7 +88,7 @@ final class Unwind {
 
       log.info('taking back');
       try {
-        await step.undo(_contextFor(entry.name, entry.arguments, facts, answers), entry.captured);
+        await step.undo(_contextFor(entry, facts, answers), entry.captured);
         log.info('taken back');
       } on Exception catch (failure) {
         log.warn('could not be taken back: $failure');
@@ -96,24 +96,29 @@ final class Unwind {
     }
   }
 
-  StepContext _contextFor(StepName name, Arguments arguments, Facts facts, Arguments answers) =>
-      StepContext(
-        shell: RecordingShell(machine.shell, recorder: recorder, redactor: redactor, step: name),
-        files: RecordingFiles(machine.files, recorder: recorder, step: name),
-        http: RecordingHttp(machine.http, recorder: recorder, redactor: redactor, step: name),
-        clock: machine.clock,
-        entropy: machine.entropy,
-        log: RecordingLogger(
-          recorder: recorder,
-          redactor: redactor,
-          step: name,
-          threshold: logLevel,
-        ),
-        step: name,
-        arguments: arguments,
-        answers: answers,
-        facts: facts,
-      );
+  StepContext _contextFor(AppliedStep entry, Facts facts, Arguments answers) => StepContext(
+    shell: RecordingShell(
+      machine.shell,
+      recorder: recorder,
+      redactor: redactor,
+      step: entry.name,
+      keepsOutput: entry.keepsOutput,
+    ),
+    files: RecordingFiles(machine.files, recorder: recorder, step: entry.name),
+    http: RecordingHttp(machine.http, recorder: recorder, redactor: redactor, step: entry.name),
+    clock: machine.clock,
+    entropy: machine.entropy,
+    log: RecordingLogger(
+      recorder: recorder,
+      redactor: redactor,
+      step: entry.name,
+      threshold: logLevel,
+    ),
+    step: entry.name,
+    arguments: entry.arguments,
+    answers: answers,
+    facts: facts,
+  );
 }
 
 /// A step whose apply ran, kept so it can be taken back.
@@ -125,6 +130,7 @@ final class AppliedStep {
     required this.arguments,
     required this.captured,
     this.undo = true,
+    this.keepsOutput = false,
   });
 
   /// The registered name, for the record.
@@ -148,4 +154,10 @@ final class AppliedStep {
   /// Carried from the program rather than read off the step, because it is not a property of the
   /// step at all: the same step is undone in one installation and left standing in another.
   final bool undo;
+
+  /// Whether the record keeps what this entry's commands said even on success.
+  ///
+  /// Carried from the program for the same reason [undo] is, so the undo of a row whose output is
+  /// evidence leaves the same evidence its apply did.
+  final bool keepsOutput;
 }

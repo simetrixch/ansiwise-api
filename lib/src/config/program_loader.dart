@@ -399,6 +399,7 @@ const Set<String> _stepKeys = <String>{
   'when',
   'undo',
   'rests_on_an_earlier_step',
+  'keep_output',
 };
 
 /// One thing wrong with a file, and where in it.
@@ -609,6 +610,7 @@ ProgramStep? _step(YamlNode node, int index, _Refusals refusals) {
   final List<PredicateName> when = _when(node, label, refusals);
   final bool undo = _undo(node, label, refusals);
   final bool restsOn = _flag(node, 'rests_on_an_earlier_step', label, refusals);
+  final bool keepsOutput = _flag(node, 'keep_output', label, refusals);
   final _Given given = _given(node, label, refusals);
 
   if (step == null || onFailure == null) {
@@ -622,6 +624,7 @@ ProgramStep? _step(YamlNode node, int index, _Refusals refusals) {
     when: when,
     undo: undo,
     restsOnAnEarlierStep: restsOn,
+    keepsOutput: keepsOutput,
   );
 }
 
