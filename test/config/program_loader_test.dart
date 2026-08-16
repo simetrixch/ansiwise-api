@@ -1,6 +1,9 @@
 import 'package:ansiwise_api/ansiwise_api.dart';
 import 'package:test/test.dart';
 
+import '../support/example_steps.dart';
+import '../support/harness.dart';
+
 /// A program file is data, and everything that is not data is refused by name and with its line.
 ///
 /// The loader reads keys and values and nothing else. What it cannot recognise it refuses, and it
@@ -513,7 +516,12 @@ steps:
     backend: {measured: host.backend, unless: something}
     on_failure: exit
 ''', where: 'p.yaml'),
-        refusesWith(contains('"backend" is a map')),
+        refusesWith(
+          allOf(
+            contains('"backend" takes a measurement'),
+            contains('{measured: <name>} is the whole of it'),
+          ),
+        ),
       );
     });
 
@@ -542,7 +550,12 @@ steps:
   - step: align_backend
     on_failure: exit
 ''', where: 'p.yaml'),
-        refusesWith(contains('"backend" is a map')),
+        refusesWith(
+          allOf(
+            contains('"backend" takes a measurement'),
+            contains('{measured: <name>} is the whole of it'),
+          ),
+        ),
       );
     });
   });
@@ -562,21 +575,63 @@ steps:
       );
     });
 
-    test('an argument holding a map is refused, and the one legal map is named', () {
-      expect(
-        () => loadProgram('''
+    test('a map that is not a measurement is READ, and the argument check decides', () {
+      // The law changed when a step gained the ability to declare an argument that holds a mapping
+      // — a name on the left and a small declaration under it. The loader has no registry, so it
+      // cannot know whether THIS argument may hold one; what it can do is read the shape and leave
+      // the judgement to the check that knows the step. A loader that refused every map would make
+      // the kind undeclarable from a file.
+      final Program program = loadProgram('''
 name: p
 roles: [master]
 steps:
   - step: write_config_file
     channel:
-      track: "1.34"
+      track: {answer: stage}
+    on_failure: exit
+''', where: 'p.yaml');
+
+      expect(program.steps.single.arguments.raw('channel'), <String, Object?>{
+        'track': <String, Object?>{'answer': 'stage'},
+      });
+    });
+
+    test('and a mapping the step does not declare is refused, naming the step and the key', () {
+      // The other half, and without it the change above would be a hole: the judgement moved, it
+      // did not disappear.
+      expect(
+        () =>
+            ProgramResolver(
+              registryOf(
+                steps: <String, (String, Step Function(Arguments))>{
+                  'write_config_file': ('x:1', (Arguments a) => const Blocks('never runs')),
+                },
+                arguments: <String, List<ArgumentSpec>>{
+                  'write_config_file': <ArgumentSpec>[
+                    const ArgumentSpec(
+                      name: 'channel',
+                      kind: ArgumentKind.text,
+                      describes: 'a channel',
+                    ),
+                  ],
+                },
+              ),
+            ).resolve(
+              loadProgram('''
+name: p
+roles: [master]
+steps:
+  - step: write_config_file
+    channel:
+      track: {answer: stage}
     on_failure: exit
 ''', where: 'p.yaml'),
-        refusesWith(
-          allOf(
-            contains('"channel" is a map'),
-            contains("the only map a row's argument holds is {measured: <name>}"),
+            ),
+        throwsA(
+          isA<ProgramInvalid>().having(
+            (ProgramInvalid refused) => refused.message,
+            'message',
+            allOf(contains('write_config_file'), contains('channel')),
           ),
         ),
       );

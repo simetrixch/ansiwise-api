@@ -934,12 +934,64 @@ Object? _argument(YamlNode node, String key, String label, _Refusals refusals) {
     return whole ? texts : null;
   }
   if (node is YamlMap) {
-    refusals.add(
-      node.span.start.line,
-      '$label: "$key" is a map — the only map a row\'s argument holds is {measured: <name>}, which '
-      'takes the value from a measurement an earlier row of this program publishes',
-    );
-    return null;
+    if (node.nodes.containsKey('measured')) {
+      // A map NAMING a measurement is the wiring, and it holds that one key and nothing else. A
+      // second key beside it would make the value half the file's and half the machine's, which is
+      // a slot becoming an expression — refused here rather than read as an ordinary mapping.
+      refusals.add(
+        node.span.start.line,
+        '$label: "$key" takes a measurement, and {measured: <name>} is the whole of it — a second '
+        'key beside it would make the value part written here and part measured there',
+      );
+      return null;
+    }
+    // Two maps are legal on a row and they are told apart by their shape, not by asking a registry
+    // this loader has not got: `{measured: <name>}` takes the value from a measurement an earlier
+    // row publishes, and is handled before this. Anything else is a MAPPING — a name on the left, a
+    // small declaration under it — which a step may declare an argument of. Whether THIS argument
+    // may hold one is the argument check's question, and it refuses with the step and the key named.
+    //
+    // What is read here is data and stays data: keys and scalars, one level of nesting, and nothing
+    // that could be an expression. A map whose value is a list or a deeper map is refused, because a
+    // shape nobody declared is a shape somebody would start putting meaning into.
+    final Map<String, Object?> mapping = <String, Object?>{};
+    bool whole = true;
+    for (final MapEntry<Object?, Object?> pair in node.nodes.entries) {
+      final Object? name = (pair.key as YamlNode?)?.value;
+      final Object? under = pair.value;
+      if (name is! String) {
+        refusals.add(node.span.start.line, '$label: "$key" has an entry whose name is not text');
+        whole = false;
+        continue;
+      }
+      if (under is YamlMap) {
+        final Map<String, Object?> body = <String, Object?>{};
+        for (final MapEntry<Object?, Object?> inner in under.nodes.entries) {
+          final Object? slot = (inner.key as YamlNode?)?.value;
+          final Object? held = (inner.value as YamlNode?)?.value;
+          if (slot is! String || held is! Object) {
+            refusals.add(
+              under.span.start.line,
+              '$label: "$key.$name" holds a name and one value under it, and nothing deeper',
+            );
+            whole = false;
+            continue;
+          }
+          body[slot] = held;
+        }
+        mapping[name] = body;
+        continue;
+      }
+      if (under is YamlNode) {
+        if (under.value case final Object held) {
+          mapping[name] = held;
+          continue;
+        }
+      }
+      refusals.add(node.span.start.line, '$label: "$key.$name" has no value');
+      whole = false;
+    }
+    return whole ? mapping : null;
   }
   if (node.value case final Object value) {
     return value;
