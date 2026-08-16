@@ -114,10 +114,22 @@ final class Template {
         }
       }
 
-      // Handle carried slots
+      // A carried slot takes its value from the file as it stands, so the line it sits on is turned
+      // into an expression over the previous content and the value is whatever stood there.
       final List<Slot> carriedOnLine = slotsOnLine
           .where((Slot s) => s.kind == SlotKind.carried)
           .toList();
+      if (carriedOnLine.length > 1) {
+        // Two of them on one line cannot both be right. The expression built below puts `(.*)` in
+        // place of each, and `(.*)` is greedy: the first would take everything up to the last
+        // fixed piece of the line and the second would take what is left, which is an answer
+        // nobody can predict from reading the template. Refused rather than resolved at random.
+        throw TemplateRefused(
+          '$path line ${i + 1} carries ${carriedOnLine.length} carried slots — '
+          '${_asSlots(carriedOnLine.map((Slot s) => s.name).toList(), suffix: '!')} — and a line '
+          'may carry at most one, because two of them cannot be told apart in what they match',
+        );
+      }
       if (carriedOnLine.isNotEmpty) {
         String regexStr = '^${RegExp.escape(line)}\$';
         for (final Slot s in carriedOnLine) {
@@ -134,14 +146,27 @@ final class Template {
         }
 
         if (match == null) {
-          dropLine = true;
-        } else {
-          int groupIdx = 1;
-          for (final Slot s in carriedOnLine) {
-            final String capturedValue = match.group(groupIdx)!;
-            line = line.replaceAll(s.text, capturedValue);
-            groupIdx++;
-          }
+          // NOT dropped. A carried slot says "keep what is already there", and where there is
+          // nothing already there the honest answers are two: find the value, or say it cannot be
+          // found. Dropping the line is the third one, and it is the one that reads as success —
+          // the file is written, the step reports done, and a line the template says belongs in it
+          // is simply not in it. On a machine where the file does not exist yet, EVERY carried line
+          // would go that way, and the second run would read the file back without them and report
+          // that there was nothing left to do.
+          throw TemplateRefused(
+            previousText == null
+                ? '$path line ${i + 1} carries ${carriedOnLine.single.text}, which takes its value '
+                      'from what stands there already, and there is no earlier content to take it '
+                      'from — this is the first time this file is written'
+                : '$path line ${i + 1} carries ${carriedOnLine.single.text}, and no line of the '
+                      'earlier content has the shape "$line" — so there is no value to carry over',
+          );
+        }
+        int groupIdx = 1;
+        for (final Slot s in carriedOnLine) {
+          final String capturedValue = match.group(groupIdx)!;
+          line = line.replaceAll(s.text, capturedValue);
+          groupIdx++;
         }
       }
 
