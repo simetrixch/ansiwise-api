@@ -3,6 +3,7 @@ import 'package:meta/meta.dart';
 import '../model/failures.dart';
 import 'argument_check.dart';
 import 'arguments.dart';
+import 'derivation.dart';
 
 /// What a program has to be told before it can run, declared by the program and nothing else.
 ///
@@ -53,20 +54,94 @@ final class DeclaredAnswers {
         if (e.value != null) e.key: e.value!,
     };
 
+    // A derived answer follows from one already answered, so supplying it is supplying a second
+    // version of the same fact — and a pair that does not match is exactly what deriving it is for.
+    final List<String> supplied = <String>[
+      for (final ArgumentSpec spec in specs)
+        if (spec.isDerived && present.containsKey(spec.name)) spec.name,
+    ];
+    if (supplied.isNotEmpty) {
+      throw AnswersRejected(
+        '$program: ${supplied.join(', ')} '
+        '${supplied.length == 1 ? 'is worked out' : 'are worked out'} from another answer and '
+        '${supplied.length == 1 ? 'cannot be' : 'cannot be'} given as well',
+      );
+    }
+
     final List<String> problems = argumentProblems(
       where: program,
       given: Arguments(present),
-      declared: specs,
+      // A derived answer is not one an operator can be missing, so it is held out of the check that
+      // asks whether every required answer was supplied. What it IS held to is the shape and the
+      // denied values below, once it has a value.
+      declared: <ArgumentSpec>[
+        for (final ArgumentSpec spec in specs)
+          if (!spec.isDerived) spec,
+      ],
       noun: 'answer',
     );
     if (problems.isNotEmpty) {
       throw AnswersRejected(problems.join('\n'));
     }
 
-    return Arguments(present).withDefaults(<String, Object>{
+    final Arguments answered = Arguments(present).withDefaults(<String, Object>{
       for (final ArgumentSpec spec in specs)
         if (spec.hasDefault) spec.name: spec.defaultValue!,
     });
+
+    return _derived(answered, program: program);
+  }
+
+  /// [answered] with every derived answer worked out and put beside the rest.
+  ///
+  /// Done HERE and not during the run, because this is the one point every later reader passes
+  /// through: the fingerprint a real run is admitted against, the record, the gate and the steps all
+  /// read what comes out of this method. A value worked out later would be outside the fingerprint,
+  /// and a real run would then be admitted against a dry run that had used different values.
+  ///
+  /// One pass and not a chain. A derived answer is worked out from a SUPPLIED one, never from
+  /// another derived one: a chain is where an order of evaluation starts to matter, and an order of
+  /// evaluation is the beginning of the language a program file may not become.
+  Arguments _derived(Arguments answered, {required String program}) {
+    final List<String> problems = <String>[];
+    final Map<String, Object> worked = <String, Object>{};
+
+    for (final ArgumentSpec spec in specs) {
+      final Derivation? how = spec.derivation;
+      if (how == null) {
+        continue;
+      }
+      final ArgumentSpec? source = named(how.from);
+      if (source == null) {
+        problems.add(
+          '$program: "${spec.name}" is worked out from "${how.from}", and this program declares no '
+          'such answer',
+        );
+        continue;
+      }
+      if (source.isDerived) {
+        problems.add(
+          '$program: "${spec.name}" is worked out from "${how.from}", which is itself worked out — '
+          'a derived answer follows from one somebody supplied, so that no order of evaluation has '
+          'to be understood to read the file',
+        );
+        continue;
+      }
+      final Object? value = answered.raw(how.from);
+      if (value is! String) {
+        problems.add(
+          '$program: "${spec.name}" is worked out from "${how.from}", which holds no text — '
+          '${value == null ? 'nothing answered it' : 'it holds ${value.runtimeType}'}',
+        );
+        continue;
+      }
+      worked[spec.name] = how.rule.applyTo(value);
+    }
+
+    if (problems.isNotEmpty) {
+      throw AnswersRejected(problems.join('\n'));
+    }
+    return answered.withDefaults(worked);
   }
 }
 

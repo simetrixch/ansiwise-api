@@ -70,6 +70,69 @@ void main() {
     answers: Arguments(answers),
   );
 
+  group('an answer WORKED OUT from another is in the input too', () {
+    // This is the reason a derived answer is worked out before the first step rather than during
+    // the run. A real run is admitted only where a dry run of the SAME fingerprint came back green,
+    // and the fingerprint is built from the resolved program plus the answers. A value that came
+    // into being later would be outside it, and a real run would be admitted against a dry run that
+    // had used different values.
+    Program withDerived() => const Program(
+      name: ProgramName('p'),
+      roles: <Role>[Role('master')],
+      answers: DeclaredAnswers(<ArgumentSpec>[
+        ArgumentSpec(name: 'fqdn', kind: ArgumentKind.text, describes: 'the domain'),
+        ArgumentSpec(
+          name: 'cluster_name',
+          kind: ArgumentKind.text,
+          describes: 'the short name',
+          required: false,
+          derivation: Derivation(rule: DerivationRule.firstDnsLabel, from: 'fqdn'),
+        ),
+      ]),
+      steps: <ProgramStep>[
+        ProgramStep(
+          step: StepName('writes_a_file'),
+          onFailure: OnFailure.exit,
+          arguments: Arguments(<String, Object>{'path': '/one'}),
+        ),
+      ],
+    );
+
+    String forFqdn(String fqdn) {
+      final Program program = withDerived();
+      return fingerprintOf(
+        program: ProgramResolver(registry()).resolve(program),
+        commit: 'abc',
+        answers: program.answers.validate(<String, Object?>{'fqdn': fqdn}, program: 'p'),
+      );
+    }
+
+    test('two domains whose SHORT names differ do not share a fingerprint', () {
+      expect(forFqdn('m1.example.com'), isNot(forFqdn('m2.example.com')));
+    });
+
+    test('the same domain twice gives the same fingerprint', () {
+      expect(forFqdn('m1.example.com'), forFqdn('m1.example.com'));
+    });
+
+    test('the worked-out value is what differs, not only the domain it came from', () {
+      // Two domains sharing a first label. If the derived answer were NOT in the material, these
+      // two would still differ — because the domain itself is in it — so the case that proves the
+      // derived value is carried is the one where the domains differ and something else must too.
+      final Program program = withDerived();
+      final Arguments answers = program.answers.validate(<String, Object?>{
+        'fqdn': 'm1.example.com',
+      }, program: 'p');
+
+      expect(
+        answers.text('cluster_name'),
+        'm1',
+        reason: 'the value the fingerprint carries is the one worked out, not the one supplied',
+      );
+      expect(answers.names, contains('cluster_name'));
+    });
+  });
+
   group("the operator's answers decide what a step does, so they are part of the input", () {
     test('two runs differing only in one answer do not share a fingerprint', () {
       // The scenario this closes: a dry run for one installation admitting a real run against

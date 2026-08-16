@@ -1,5 +1,7 @@
 import 'package:meta/meta.dart';
 
+import 'derivation.dart';
+
 /// What kind of value an argument holds.
 enum ArgumentKind {
   /// Text.
@@ -69,6 +71,7 @@ final class ArgumentSpec {
     this.shape,
     this.denied = const <String>[],
     this.statedWhen,
+    this.derivation,
   });
 
   /// The key a program file writes.
@@ -119,6 +122,15 @@ final class ArgumentSpec {
 
   /// The condition that dictates whether this answer should be asked at all.
   final StatedWhen? statedWhen;
+
+  /// How this answer is worked out from another, or null where somebody supplies it.
+  ///
+  /// An answer with one is never asked for and never accepted from an operator: it follows from a
+  /// question already answered, and taking it as well would let a pair be given that does not match.
+  final Derivation? derivation;
+
+  /// Whether this answer is worked out rather than supplied.
+  bool get isDerived => derivation != null;
 
   /// Whether a value stands in for it when a program does not give it.
   bool get hasDefault => defaultValue != null;

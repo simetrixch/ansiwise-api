@@ -19,6 +19,7 @@ import 'package:yaml/yaml.dart';
 
 import '../domain/answers.dart';
 import '../domain/arguments.dart';
+import '../domain/derivation.dart';
 import '../domain/value_shape.dart';
 import '../domain/program.dart';
 import '../model/failures.dart';
@@ -294,6 +295,53 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
       );
     }
 
+    // `derived:` names a rule out of the closed set, and `from:` names the answer it is worked out
+    // from. Both or neither: half of it is a declaration nobody can act on.
+    final Object? derivedNode = entry['derived'];
+    final Object? fromNode = entry['from'];
+    Derivation? derivation;
+    if (derivedNode != null || fromNode != null) {
+      if (derivedNode == null || fromNode == null) {
+        refusals.add(
+          line,
+          '"$name": "derived" names the rule and "from" names the answer it is worked out from, '
+          'and one without the other says nothing',
+        );
+        continue;
+      }
+      if (resolved != ArgumentKind.text) {
+        refusals.add(line, '"$name" holds ${resolved.name}, and only text is worked out from text');
+        continue;
+      }
+      if (isSecret == true) {
+        // A value that follows from another is not a secret of its own, and calling it one would
+        // put the answer it came from one rule away from a redacted record while it stayed plain.
+        refusals.add(line, '"$name" is worked out from another answer, so it is not a secret');
+        continue;
+      }
+      if (isRequired == true) {
+        refusals.add(
+          line,
+          '"$name" is worked out from another answer, so nobody supplies it and it cannot be '
+          '"required: true"',
+        );
+        continue;
+      }
+      if (derivedNode is! String || DerivationRule.named(derivedNode) == null) {
+        refusals.add(
+          line,
+          '"$name": "derived" is "$derivedNode", and it is one of '
+          '${DerivationRule.allWritten.join(', ')}',
+        );
+        continue;
+      }
+      if (fromNode is! String || fromNode.isEmpty) {
+        refusals.add(line, '"$name": "from" is the name of the answer this one is worked out from');
+        continue;
+      }
+      derivation = Derivation(rule: DerivationRule.named(derivedNode)!, from: fromNode);
+    }
+
     final Object? unwrapped = fallback is YamlList
         ? <String>[for (final Object? v in fallback) '$v']
         : fallback;
@@ -334,6 +382,7 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
         shape: shape,
         denied: denied,
         statedWhen: statedWhen,
+        derivation: derivation,
       ),
     );
   }
@@ -354,6 +403,16 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
           'the answer "${trigger.equalsAnswer}" named in "${spec.name}" stated_when does not exist',
         );
       }
+    }
+  }
+
+  for (final ArgumentSpec spec in specs) {
+    final Derivation? how = spec.derivation;
+    if (how != null && !seen.contains(how.from)) {
+      refusals.add(
+        document.span.start.line,
+        'the answer "${how.from}" that "${spec.name}" is worked out from does not exist',
+      );
     }
   }
 
@@ -382,6 +441,8 @@ const Set<String> _answerKeys = <String>{
   'shape',
   'denied',
   'stated_when',
+  'derived',
+  'from',
 };
 
 /// The kinds an answer may declare, as a program file writes them.

@@ -18,6 +18,7 @@ export 'src/config/program_loader.dart';
 export 'src/domain/answers.dart';
 export 'src/domain/argument_check.dart';
 export 'src/domain/arguments.dart';
+export 'src/domain/derivation.dart';
 export 'src/domain/value_shape.dart';
 export 'src/domain/catalogue.dart';
 export 'src/domain/clock.dart';
