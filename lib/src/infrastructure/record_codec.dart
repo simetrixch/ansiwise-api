@@ -52,6 +52,10 @@ final class RecordCodec implements RecordJson {
       'exit_code': ?record.exitCode,
       'steps': <Object?>[for (final StepRecord step in record.steps) stepRecord(step)],
       'issues': record.issues,
+      // Written only when it is not empty, so a record that carries the key is a record about a
+      // machine somebody has to go and look at. An empty list on every other run would read as a
+      // field somebody forgot to fill in.
+      if (record.leftStanding.isNotEmpty) 'left_standing': record.leftStanding,
     };
   }
 
@@ -80,6 +84,9 @@ final class RecordCodec implements RecordJson {
       for (final Map<String, Object?> step in _objects(json, 'steps')) stepRecordFrom(step),
     ],
     issues: _texts(json, 'issues'),
+    leftStanding: json.containsKey('left_standing')
+        ? _texts(json, 'left_standing')
+        : const <String>[],
   );
 
   @override
@@ -186,6 +193,9 @@ final class RecordCodec implements RecordJson {
         exitCode: _number(json, 'exit_code'),
         issues: _texts(json, 'issues'),
         standings: _standings(_object(json, 'standings')),
+        leftStanding: json.containsKey('left_standing')
+            ? _texts(json, 'left_standing')
+            : const <String>[],
       ),
       _ => throw FormatException('there is no event kind called "$kind"'),
     };
@@ -359,6 +369,7 @@ final class RecordCodec implements RecordJson {
         'declared': e.standings.declared,
         'skipped': e.standings.skipped,
       },
+      if (e.leftStanding.isNotEmpty) 'left_standing': e.leftStanding,
     },
   };
 }

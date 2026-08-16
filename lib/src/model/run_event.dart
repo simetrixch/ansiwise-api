@@ -353,6 +353,7 @@ final class RunFinished extends RunEvent {
     required this.exitCode,
     required this.issues,
     this.standings = const Standings(),
+    this.leftStanding = const <String>[],
   }) : super(step: null);
 
   /// What the process returns to whatever started it.
@@ -365,6 +366,12 @@ final class RunFinished extends RunEvent {
   /// steps returns the same zero as one that measured every row. Carried on the event so that
   /// somebody tailing a run reads the same three numbers as somebody opening its record afterwards.
   final Standings standings;
+
+  /// The steps this run applied and did not take back, by the name a program file writes.
+  ///
+  /// Carried on the closing event as well as in the record, so somebody watching a run live learns
+  /// it at the moment it is decided rather than by opening the record afterwards.
+  final List<String> leftStanding;
 
   /// Every failure the run carried on past, repeated here so a run that finished with three
   /// problems says so rather than looking clean.

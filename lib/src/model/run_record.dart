@@ -29,6 +29,7 @@ final class RunRecord {
     this.exitCode,
     this.steps = const <StepRecord>[],
     this.issues = const <String>[],
+    this.leftStanding = const <String>[],
   });
 
   /// The run's identifier, unique on the machine that produced it.
@@ -45,6 +46,17 @@ final class RunRecord {
 
   /// When it began, in UTC.
   final DateTime start;
+
+  /// The steps this run applied and did NOT take back, by the name a program file writes.
+  ///
+  /// Empty for every run that either changed nothing or unwound what it changed. Not empty means the
+  /// machine is in a state no run produced on purpose: something failed, the steps before it had
+  /// already acted, and the unwind that would have taken them back was deliberately not performed.
+  ///
+  /// **A field and not a log line.** Whoever reads the result decides what to do to a machine next,
+  /// and a warning among the log entries is not where that decision is made. A run that could have
+  /// taken its steps back and did not says so where the outcome is stated.
+  final List<String> leftStanding;
 
   /// The stage this installation is.
   final Stage stage;
@@ -129,6 +141,7 @@ final class RunRecord {
     required int exitCode,
     required List<StepRecord> steps,
     required List<String> issues,
+    List<String> leftStanding = const <String>[],
   }) => RunRecord(
     id: id,
     program: program,
@@ -146,5 +159,6 @@ final class RunRecord {
     exitCode: exitCode,
     steps: steps,
     issues: issues,
+    leftStanding: leftStanding,
   );
 }

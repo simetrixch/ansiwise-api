@@ -35,7 +35,7 @@ final class Runner {
     required this.recorder,
     required this.redactor,
     this.logLevel = LogLevel.info,
-    this.allowUnwind = true,
+    this.unwindDisabledBy,
   });
 
   /// What the program acts on.
@@ -54,8 +54,16 @@ final class Runner {
   /// reader never has to work out which part of a record was filtered and which was not.
   final LogLevel logLevel;
 
-  /// Whether the engine should roll back steps when a failure happens.
-  final bool allowUnwind;
+  /// What turned the unwind off, or null where it is on.
+  ///
+  /// One field rather than a flag beside a reason, because the two cannot then disagree. It holds
+  /// the SURFACE the decision came from — the option, or the configuration file and its key — since
+  /// a message naming a command-line flag to an operator who never typed one sends them looking in
+  /// the wrong place.
+  final String? unwindDisabledBy;
+
+  /// Whether a failure takes the applied steps back.
+  bool get allowUnwind => unwindDisabledBy == null;
 
   /// Runs [program] in [mode] against the machine described by [header].
   ///
@@ -91,6 +99,10 @@ final class Runner {
       final Facts facts = await _measure(program);
       final _Walk walk = await _walkSteps(program, mode, facts, answers);
 
+      // What the run applied and did not take back. Empty unless the unwind was turned off, which
+      // is the one way a failed run leaves the machine in a state nothing produced on purpose.
+      List<String> leftStanding = const <String>[];
+
       if (walk.ended && walk.applied.isNotEmpty) {
         if (allowUnwind) {
           await Unwind(
@@ -100,13 +112,19 @@ final class Runner {
             logLevel: logLevel,
           ).undo(walk.applied, facts, answers);
         } else {
+          leftStanding = <String>[
+            for (final AppliedStep applied in walk.applied) applied.name.value,
+          ];
           final Logger log = RecordingLogger(
             recorder: recorder,
             redactor: redactor,
             step: const StepName('unwind'),
             threshold: logLevel,
           );
-          log.warn('unwind was requested by failure but skipped because --no-unwind was given');
+          log.warn(
+            'a failure would have taken ${leftStanding.length} applied step(s) back, and '
+            '$unwindDisabledBy says not to — ${leftStanding.join(', ')} are still on this machine',
+          );
         }
       }
 
@@ -117,6 +135,7 @@ final class Runner {
         exitCode: exitCode,
         steps: walk.records,
         issues: walk.issues,
+        leftStanding: leftStanding,
       );
       // The closing line carries the three numbers beside the exit code, because the exit code
       // answers a different question. A run that skipped half its steps returns the same zero as one
@@ -129,6 +148,7 @@ final class Runner {
           exitCode: exitCode,
           issues: walk.issues,
           standings: closed.standings,
+          leftStanding: leftStanding,
         ),
       );
 

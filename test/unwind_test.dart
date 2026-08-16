@@ -36,6 +36,83 @@ void main() {
     expect(h.files.contents, isEmpty);
   });
 
+  group('an unwind that was deliberately not performed', () {
+    Runner refusingToUnwind(Harness h, {required String by}) => Runner(
+      machine: h.machine,
+      recorder: h.recorder,
+      redactor: h.redactor,
+      unwindDisabledBy: by,
+    );
+
+    test('leaves the changes where they are, which is the whole point of asking for it', () async {
+      final Harness h = Harness();
+      await refusingToUnwind(
+        h,
+        by: 'the --no-unwind option',
+      ).run(program: twoWritesThenAFailure(), mode: Mode.run, header: h.header());
+
+      expect(h.files.deleted, isEmpty);
+      expect(h.files.contents.keys, containsAll(<String>['/one', '/two']));
+    });
+
+    test('the RECORD names every step still standing, not a log line', () async {
+      // A warning among the log entries is not where somebody decides what to do to a machine
+      // next. This is what that decision is read off, so it is a field of the outcome.
+      final Harness h = Harness();
+      final RunRecord closed = await refusingToUnwind(
+        h,
+        by: 'the --no-unwind option',
+      ).run(program: twoWritesThenAFailure(), mode: Mode.run, header: h.header());
+
+      expect(closed.leftStanding, <String>['first', 'second']);
+      expect(closed.exitCode, 1);
+    });
+
+    test('it survives being written down and read back', () async {
+      // The record on disk is what anybody looks at afterwards, and a field that only exists in
+      // memory tells nobody anything.
+      final Harness h = Harness();
+      final RunRecord closed = await refusingToUnwind(
+        h,
+        by: 'the --no-unwind option',
+      ).run(program: twoWritesThenAFailure(), mode: Mode.run, header: h.header());
+
+      const RecordCodec codec = RecordCodec();
+      final Map<String, Object?> written = codec.run(closed);
+      expect(written['left_standing'], <String>['first', 'second']);
+      expect(codec.runFrom(written).leftStanding, <String>['first', 'second']);
+    });
+
+    test('the message names the surface the decision came from', () async {
+      // It used to say "--no-unwind was given" whatever had decided it, so an operator who set a
+      // key in a configuration file was told about a command-line option they never typed.
+      final Harness h = Harness();
+      await refusingToUnwind(
+        h,
+        by: 'no_unwind: true in ansiwise.yaml',
+      ).run(program: twoWritesThenAFailure(), mode: Mode.run, header: h.header());
+
+      expect(
+        h.recorder.events.whereType<Log>().map((Log e) => e.message).join('\n'),
+        allOf(contains('no_unwind: true in ansiwise.yaml'), contains('first, second')),
+      );
+    });
+
+    test('the innocent neighbour: a run that DID unwind carries nothing standing', () async {
+      // Without this, a version that filled the field on every failed run would pass every test
+      // above and say the machine was dirty after a clean rollback.
+      final Harness h = Harness();
+      final RunRecord closed = await h.runner.run(
+        program: twoWritesThenAFailure(),
+        mode: Mode.run,
+        header: h.header(),
+      );
+
+      expect(closed.leftStanding, isEmpty);
+      expect(const RecordCodec().run(closed).containsKey('left_standing'), isFalse);
+    });
+  });
+
   test('a step whose apply THREW is taken back, which is where it matters most', () async {
     // The contract on Step.undo says it must tolerate being called after a partial apply, "and that
     // is exactly when it matters". It used to be the one path where it was never called: an apply
