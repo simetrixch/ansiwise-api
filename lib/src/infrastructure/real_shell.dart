@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../domain/shell.dart';
+import '../model/failures.dart';
 
 /// Runs a command by starting the process, and never by way of a shell.
 ///
@@ -11,9 +12,38 @@ import '../domain/shell.dart';
 /// sign, a semicolon or a newline arrives at the process as that value. There is no string for it to
 /// be part of, which is why the whole class of quoting failures a shell script spends its comments
 /// on cannot occur here.
+///
+/// **That holds for an elevated command too, and it used not to.** Raising a command to root once
+/// meant handing `sh -c` a line that redirected a fixed path into the elevating tool. Three things
+/// were wrong with it at once: the path was a literal nobody could change, a missing file failed
+/// inside the shell and came back as a non-zero exit of the STEP's command, and the quoting the rest
+/// of this class exists to avoid was back. The elevating tool is now started directly, like any
+/// other executable, and the password reaches it on its standard input.
 final class RealShell implements Shell {
-  /// Creates the shell a real run is given.
-  const RealShell();
+  /// Creates the shell a real run is given, told where an elevation password comes from.
+  ///
+  /// Required rather than defaulted. A shell built without thinking about elevation is one that
+  /// silently reaches for somebody's home directory, which is the defect this exists to end;
+  /// [Elevation.unconfigured] is how an installation says it never elevates, and it says it out
+  /// loud.
+  const RealShell({required this.elevation});
+
+  /// Where the password comes from for a command that has to run as root.
+  final Elevation elevation;
+
+  /// What starts an elevated command, and what each argument of it is for.
+  ///
+  /// `--stdin` reads the password from standard input instead of the terminal, because there is no
+  /// terminal. `--reset-timestamp` drops any credential this machine cached, so a run behaves the
+  /// same whether or not somebody typed a password on that machine minutes ago. `--prompt=` empties
+  /// the prompt, so nothing is written to standard error that a step would then record as output.
+  /// `--` ends the options, so a command whose own name begins with a dash is still the command.
+  static const List<String> _elevatedPrefix = <String>[
+    '--stdin',
+    '--reset-timestamp',
+    '--prompt=',
+    '--',
+  ];
 
   @override
   Future<CommandResult> run(Command command) async {
@@ -21,17 +51,24 @@ final class RealShell implements Shell {
 
     final String executable;
     final List<String> arguments;
+    // Read BEFORE the process is started, so a command that cannot be raised to root never runs at
+    // all. Started first and elevated afterwards, the operator would read the tool's own failure
+    // and go looking for a problem that is not in it.
+    final String? password;
 
     if (command.elevated) {
-      executable = 'sh';
-      arguments = <String>[
-        '-c',
-        'sudo --stdin --reset-timestamp --prompt="" "\$@" < ~/.sudopass',
-        '--',
-        command.executable,
-        ...command.arguments,
-      ];
+      password = elevation.password;
+      if (password == null) {
+        throw ElevationUnavailable(
+          '${command.argv.join(' ')} has to run as root, and nothing says where the elevation '
+          'password comes from\n'
+          'name the file holding it in the installation\'s configuration',
+        );
+      }
+      executable = 'sudo';
+      arguments = <String>[..._elevatedPrefix, command.executable, ...command.arguments];
     } else {
+      password = null;
       executable = command.executable;
       arguments = command.arguments;
     }
@@ -45,6 +82,10 @@ final class RealShell implements Shell {
       environment: command.environment.isEmpty ? null : command.environment,
       runInShell: false,
     );
+
+    if (password != null) {
+      await _answerThePrompt(process, password);
+    }
 
     // Both streams are drained while the process is still running. A process whose output fills the
     // pipe buffer blocks on its next write until somebody reads, so collecting the output only after
@@ -62,6 +103,25 @@ final class RealShell implements Shell {
       stderr: await err,
       elapsed: watch.elapsed,
     );
+  }
+
+  /// Writes [password] to the elevating tool and closes the stream.
+  ///
+  /// Closing is what makes the command underneath it see an ended standard input rather than a pipe
+  /// nobody ever writes to again, which a tool that reads standard input would wait on forever.
+  ///
+  /// A write that fails is left alone on purpose, and this is not a swallowed failure: it happens
+  /// when the tool has already exited — a wrong password, a machine where the account may not
+  /// elevate — and the exit code that follows is the answer. Reporting the broken pipe instead
+  /// would replace a failure an operator can act on with one about a stream.
+  static Future<void> _answerThePrompt(Process process, String password) async {
+    try {
+      process.stdin.write('$password\n');
+      await process.stdin.flush();
+      await process.stdin.close();
+    } on Object {
+      return;
+    }
   }
 
   /// Malformed bytes become the replacement character instead of throwing. A command that writes

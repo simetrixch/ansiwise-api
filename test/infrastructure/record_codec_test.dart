@@ -62,16 +62,29 @@ void main() {
           at: at,
           step: step,
           argv: const <String>['a-tool', 'upgrade', r'--set=value=$literal'],
+          elevated: true,
           workingDirectory: '/opt/somewhere',
         ),
       );
       expect(back.argv, <String>['a-tool', 'upgrade', r'--set=value=$literal']);
       expect(back.workingDirectory, '/opt/somewhere');
+      expect(
+        back.elevated,
+        isTrue,
+        reason: 'a command that ran as root reads exactly like one that did not without this',
+      );
 
       final CommandStarted bare = reread<CommandStarted>(
-        CommandStarted(sequence: 4, at: at, step: step, argv: const <String>['true']),
+        CommandStarted(
+          sequence: 4,
+          at: at,
+          step: step,
+          argv: const <String>['true'],
+          elevated: false,
+        ),
       );
       expect(bare.workingDirectory, isNull);
+      expect(bare.elevated, isFalse);
     });
 
     test('output, from either stream', () {

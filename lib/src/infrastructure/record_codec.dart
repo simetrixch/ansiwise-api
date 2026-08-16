@@ -132,6 +132,9 @@ final class RecordCodec implements RecordJson {
         at: at,
         step: _step(json),
         argv: _texts(json, 'argv'),
+        // False where the key is absent, which is what a record written before this field existed
+        // showed its reader anyway. Every record this build writes carries it.
+        elevated: json['elevated'] == true,
         workingDirectory: _optionalText(json, 'working_directory'),
       ),
       'output' => Output(
@@ -339,6 +342,7 @@ final class RecordCodec implements RecordJson {
     final StepStarted e => <String, Object?>{'source': e.source},
     final CommandStarted e => <String, Object?>{
       'argv': e.argv,
+      'elevated': e.elevated,
       if (e.workingDirectory case final String directory) 'working_directory': directory,
     },
     final Output e => <String, Object?>{'stream': e.stream.name, 'text': e.text},

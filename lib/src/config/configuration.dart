@@ -30,6 +30,8 @@ import 'condition_binding.dart';
 ///     predicate: key_is_true
 ///     file: settings/one
 ///     key: SUBJECT_ENABLED
+/// elevation:
+///   password_file: /home/operator/.elevation
 /// ```
 @immutable
 final class Configuration {
@@ -40,6 +42,7 @@ final class Configuration {
     this.requireDryRun = true,
     this.allowUnwind = true,
     this.conditions = const <String, ConditionBinding>{},
+    this.elevationPasswordFile,
   });
 
   /// The name the file is looked for under, beside the programs.
@@ -81,6 +84,16 @@ final class Configuration {
   /// there would be the start of a configuration language. So it is said here, once per
   /// installation, as named slots each holding exactly one value.
   final Map<String, ConditionBinding> conditions;
+
+  /// The file holding the password that raises a command to root, or null where none is named.
+  ///
+  /// **No default, here or anywhere below.** A path baked into the framework is right on the
+  /// machine it was written for and silently wrong on every other, and wrong here does not
+  /// announce itself: the elevation fails, the command underneath it fails, and the record shows
+  /// the command's own failure. An installation whose steps never need root names nothing and is
+  /// completely configured; one that does name it, and the file is read at start-up so a missing
+  /// one is a refusal before anything is touched.
+  final String? elevationPasswordFile;
 
   /// Reads [path] through [files].
   ///
@@ -127,7 +140,34 @@ final class Configuration {
       requireDryRun: _requireDryRun(document, path),
       allowUnwind: _allowUnwind(document, path),
       conditions: _conditions(document, path),
+      elevationPasswordFile: _elevationPasswordFile(document, path),
     );
+  }
+
+  /// The file [document] says the elevation password stands in, or null where it names none.
+  ///
+  /// A block that is there and says nothing usable is refused rather than read past: somebody who
+  /// wrote `elevation:` meant to configure elevation, and a key silently ignored leaves them
+  /// believing they did.
+  static String? _elevationPasswordFile(YamlMap document, String path) {
+    final Object? elevation = document['elevation'];
+    if (elevation == null) {
+      return null;
+    }
+    if (elevation is! YamlMap) {
+      throw PluginRejected(
+        '$path: "elevation" has to be a mapping, with "password_file:" under it',
+      );
+    }
+    final Object? file = elevation['password_file'];
+    if (file is! String || file.isEmpty) {
+      throw PluginRejected(
+        '$path: "elevation" says no "password_file:", so nothing says where the password that '
+        'raises a command to root comes from\n'
+        'name the file holding it, or leave the whole block off where nothing needs root',
+      );
+    }
+    return file;
   }
 
   /// The conditions [document] names, or none where it names none.

@@ -47,9 +47,9 @@ void main() {
         r"it's `backticked` & piped |",
       ];
 
-      final CommandResult result = await const RealShell().run(
-        Command(Platform.resolvedExecutable, <String>[script, ...awkward]),
-      );
+      final CommandResult result = await const RealShell(
+        elevation: Elevation.unconfigured(),
+      ).run(Command(Platform.resolvedExecutable, <String>[script, ...awkward]));
 
       expect(result.exitCode, 0);
       expect(
@@ -60,9 +60,9 @@ void main() {
     });
 
     test('a non-zero exit is data and not a failure', () async {
-      final CommandResult result = await const RealShell().run(
-        Command(Platform.resolvedExecutable, <String>[script, '--fail']),
-      );
+      final CommandResult result = await const RealShell(
+        elevation: Elevation.unconfigured(),
+      ).run(Command(Platform.resolvedExecutable, <String>[script, '--fail']));
 
       expect(result.exitCode, 3);
       expect(result.ok, isFalse);
@@ -72,7 +72,7 @@ void main() {
     test('the working directory and the environment are honoured', () async {
       final Directory work = await Directory(p.join(temp.path, 'work')).create();
 
-      final CommandResult result = await const RealShell().run(
+      final CommandResult result = await const RealShell(elevation: Elevation.unconfigured()).run(
         Command.detailed(
           Platform.resolvedExecutable,
           arguments: <String>[script, '--context'],
@@ -90,7 +90,7 @@ void main() {
       final String marks = p.join(temp.path, 'marks');
 
       await expectLater(
-        const RealShell().run(
+        const RealShell(elevation: Elevation.unconfigured()).run(
           Command.detailed(
             Platform.resolvedExecutable,
             arguments: <String>[script, '--append-forever', marks],
@@ -110,7 +110,9 @@ void main() {
 
     test('a command that cannot be started at all throws', () async {
       await expectLater(
-        const RealShell().run(const Command('no-such-program-anywhere')),
+        const RealShell(
+          elevation: Elevation.unconfigured(),
+        ).run(const Command('no-such-program-anywhere')),
         throwsA(isA<ProcessException>()),
       );
     });

@@ -69,6 +69,7 @@ final class RecordingShell implements Shell {
         at: at,
         step: step,
         argv: redactor.hideAll(command.argv),
+        elevated: command.elevated,
         workingDirectory: command.workingDirectory,
       ),
     );

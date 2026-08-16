@@ -116,11 +116,25 @@ final class CommandStarted extends RunEvent {
     required super.at,
     required StepName super.step,
     required this.argv,
+    required this.elevated,
     this.workingDirectory,
   });
 
   /// The executable and its arguments, as they were passed — never joined into a command line.
+  ///
+  /// The command AS THE STEP WROTE IT, without whatever raised it to root. What elevation adds is
+  /// the same options every time and says nothing about this run; what would be lost by writing
+  /// them is a reader's ability to see the command the step meant. [elevated] carries the one bit
+  /// that really differs.
   final List<String> argv;
+
+  /// Whether it ran as root.
+  ///
+  /// Nothing else in the record tells a command that ran as the operator from one that ran as root,
+  /// and the two do not have the same consequences on a machine. Written for every command, true
+  /// and false alike: absent would make "it did not run as root" and "whatever wrote this did not
+  /// say" the same reading.
+  final bool elevated;
 
   /// The directory it ran in, or null for the run's own.
   final String? workingDirectory;

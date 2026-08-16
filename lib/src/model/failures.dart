@@ -88,6 +88,16 @@ final class GateNotMet extends EngineFailure {
   final String required;
 }
 
+/// A command has to run as root, and nothing usable says how.
+///
+/// Raised INSTEAD of starting the process. A command that cannot be raised to root and is started
+/// anyway fails as the command itself, and then the operator reads a tool's output looking for a
+/// problem that is not in it.
+final class ElevationUnavailable extends EngineFailure {
+  /// Records that a command could not be raised to root, because [message].
+  const ElevationUnavailable(super.message);
+}
+
 /// A command returned something other than zero.
 ///
 /// The message carries the command and what it wrote to standard error, because that pair is what

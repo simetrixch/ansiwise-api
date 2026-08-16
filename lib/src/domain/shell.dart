@@ -1,5 +1,72 @@
 import 'package:meta/meta.dart';
 
+import '../model/failures.dart';
+import 'files.dart';
+
+/// Where the password that raises a command to root comes from.
+///
+/// **There is no default and there cannot be one.** A path written into the framework is right on
+/// the machine it was written for and silently wrong on every other: another operator, another
+/// account, another layout. Worse, a wrong one does not announce itself — the elevation fails, the
+/// command underneath it fails, and what the record shows is the command's own failure. So the
+/// framework holds no path at all; the installation says where the password is, and where it says
+/// nothing, no command is raised to root.
+///
+/// **The password crosses no command line.** It is read once, through the files port, and handed to
+/// the elevating tool on its standard input. A password in an argument list stands in the process
+/// listing for every account on the machine for as long as the command runs.
+@immutable
+final class Elevation {
+  /// Nothing says where the password comes from, so no command may be raised to root.
+  ///
+  /// Not an error by itself: an installation whose steps never need root is completely configured
+  /// without it. What it does is turn the first command that DOES need root into a refusal naming
+  /// what has to be configured, instead of a shell failure that looks like the command's own.
+  const Elevation.unconfigured() : password = null, from = null;
+
+  /// The password [from] held, kept in memory for as long as this process lives.
+  const Elevation.of(this.password, {required this.from});
+
+  /// Reads the password out of [path], or refuses saying what is wrong with it.
+  ///
+  /// Read at start-up rather than at the first elevated command, so an operator learns that the
+  /// file is missing before the run has changed anything — the same reason the answers are checked
+  /// before the first step.
+  ///
+  /// Throws [ElevationUnavailable] naming the file when it is not there or holds nothing. The
+  /// message is about the PASSWORD, because the failure is about the password: a refusal phrased in
+  /// terms of whatever command needed root sends the operator to the wrong place.
+  static Future<Elevation> read({required Files files, required String path}) async {
+    if (!await files.exists(path)) {
+      throw ElevationUnavailable(
+        'there is no elevation password file at "$path"\n'
+        'this installation names it, and nothing can be raised to root without it',
+      );
+    }
+    final String text = await files.read(path);
+    // The first line, and the newline an editor put at the end of it taken off. Nothing else is
+    // stripped: a password is used exactly as it stands, and quietly trimming one would let a run
+    // fail to elevate with a file that looks correct.
+    final String first = text.split('\n').first;
+    final String password = first.endsWith('\r') ? first.substring(0, first.length - 1) : first;
+    if (password.isEmpty) {
+      throw ElevationUnavailable(
+        'the elevation password file "$path" begins with an empty line, so it holds no password',
+      );
+    }
+    return Elevation.of(password, from: path);
+  }
+
+  /// The password itself, or null where this installation named none.
+  ///
+  /// Never recorded, never logged and never passed as an argument. The one thing that reads it
+  /// writes it to the elevating tool's standard input.
+  final String? password;
+
+  /// Which file it was read out of, named in a refusal, or null where none was read.
+  final String? from;
+}
+
 /// Running a command is one of the three ways this framework reaches outside.
 ///
 /// A step never starts a process itself. It asks this. That is what lets a dry run refuse a
@@ -41,6 +108,12 @@ final class Command {
   });
 
   /// Describes a command that only looks at the machine.
+  ///
+  /// A shorthand, and it fixes [elevated] to false because a constructor cannot take both a
+  /// positional list and a named flag. An observing command that needs root IS expressible and is
+  /// written with [Command.detailed], setting `observes: true` and `elevated: true` — the two are
+  /// independent, and a check that has to read something only root can read stays a command a dry
+  /// run may perform.
   const Command.observing(this.executable, [this.arguments = const <String>[]])
     : workingDirectory = null,
       environment = const <String, String>{},
@@ -78,7 +151,15 @@ final class Command {
   /// How long to wait before giving up, or null to wait as long as it takes.
   final Duration? timeout;
 
-  /// Whether this command requires root privileges (will be executed with sudo).
+  /// Whether this command has to run as root.
+  ///
+  /// Independent of [observes]. A command may look at the machine and still need root to see what
+  /// it is looking at, and such a command stays observing — the dry run performs it, because
+  /// running as root does not make it change anything. [Command.observing] cannot express the pair
+  /// only because it takes its arguments positionally; [Command.detailed] can.
+  ///
+  /// Where the password comes from is not decided here and is not knowable from a command: it is
+  /// [Elevation], which the composition root reads out of the installation's own configuration.
   final bool elevated;
 }
 
