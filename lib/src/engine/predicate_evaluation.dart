@@ -43,7 +43,11 @@ final class PredicateEvaluation {
 
     final Map<PredicateName, bool> answers = <PredicateName, bool>{};
     for (final RegisteredPredicate registered in needed.values) {
-      final PredicateResult result = await registered.predicate.evaluate(_context(registered.name));
+      // Non-null because the resolver refuses a row that names a condition nothing bound values to,
+      // and a program reaches this only once it has resolved.
+      final PredicateResult result = await registered.predicate!.evaluate(
+        _context(registered.name),
+      );
       answers[registered.name] = result.held;
       recorder.record(
         (int sequence, DateTime at) => PredicateEvaluated(

@@ -13,6 +13,7 @@ export 'src/api/endpoints/programs_endpoint.dart';
 export 'src/api/endpoints/runs_endpoint.dart';
 export 'src/api/record_json.dart';
 export 'src/config/loaded_catalogue.dart';
+export 'src/config/condition_binding.dart';
 export 'src/config/configuration.dart';
 export 'src/config/program_loader.dart';
 export 'src/domain/answers.dart';

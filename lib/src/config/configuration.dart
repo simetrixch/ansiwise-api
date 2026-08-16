@@ -3,7 +3,9 @@ import 'package:yaml/yaml.dart';
 
 import '../domain/files.dart';
 import '../model/failures.dart';
+import '../model/names.dart';
 import '../model/run_event.dart';
+import 'condition_binding.dart';
 
 /// What the installation's own configuration says, read from one file beside the programs.
 ///
@@ -23,6 +25,11 @@ import '../model/run_event.dart';
 ///   dry: false
 /// plugins:
 ///   - example-plugin
+/// conditions:
+///   subject_enabled:
+///     predicate: key_is_true
+///     file: settings/one
+///     key: SUBJECT_ENABLED
 /// ```
 @immutable
 final class Configuration {
@@ -32,6 +39,7 @@ final class Configuration {
     this.logLevel = LogLevel.info,
     this.requireDryRun = true,
     this.allowUnwind = true,
+    this.conditions = const <String, ConditionBinding>{},
   });
 
   /// The name the file is looked for under, beside the programs.
@@ -63,6 +71,16 @@ final class Configuration {
   /// True unless `no_unwind: true` is given, in which case the framework stops on failure
   /// leaving the machine exactly as it was, preserving evidence for debugging.
   final bool allowUnwind;
+
+  /// The conditions this installation names, from the name a program row writes to what it is.
+  ///
+  /// **This is the surface a generic condition is pointed at, and there is no other.** A plugin
+  /// brings the condition — "the key is true in that file" — and knows nothing about which file or
+  /// which key, because a package that named ours would be useless to anybody else with the same
+  /// tool. A program row cannot say it either: `when:` is a list of bare names, and a structure
+  /// there would be the start of a configuration language. So it is said here, once per
+  /// installation, as named slots each holding exactly one value.
+  final Map<String, ConditionBinding> conditions;
 
   /// Reads [path] through [files].
   ///
@@ -108,6 +126,105 @@ final class Configuration {
       logLevel: _logLevel(document, path),
       requireDryRun: _requireDryRun(document, path),
       allowUnwind: _allowUnwind(document, path),
+      conditions: _conditions(document, path),
+    );
+  }
+
+  /// The conditions [document] names, or none where it names none.
+  ///
+  /// Every key under a condition other than `predicate:` is a value handed to it. Which of them it
+  /// accepts and what kind each holds is not decided here: this reads the file, and the binding
+  /// against the registry says whether the values add up, because only the registry knows what the
+  /// generic condition declared.
+  static Map<String, ConditionBinding> _conditions(YamlMap document, String path) {
+    final Object? written = document['conditions'];
+    if (written == null) {
+      return const <String, ConditionBinding>{};
+    }
+    if (written is! YamlMap) {
+      throw PluginRejected(
+        '$path: "conditions" has to be a mapping from the name a program row writes to what that '
+        'name is',
+      );
+    }
+
+    final Map<String, ConditionBinding> conditions = <String, ConditionBinding>{};
+    for (final MapEntry<Object?, Object?> entry in written.entries) {
+      final Object? name = entry.key;
+      if (name is! String || !PredicateName.isValid(name)) {
+        throw PluginRejected(
+          '$path: "$name" is not a condition name — lower case, digits and underscores, starting '
+          'with a letter, because that is what a program row may write behind "when:"',
+        );
+      }
+      final Object? body = entry.value;
+      if (body is! YamlMap) {
+        throw PluginRejected(
+          '$path: the condition "$name" has to be a mapping, naming the condition it is under '
+          '"predicate:" and giving it its values',
+        );
+      }
+      final Object? generic = body['predicate'];
+      if (generic == null) {
+        throw PluginRejected(
+          '$path: the condition "$name" says no "predicate:", so nothing says which condition it is',
+        );
+      }
+      if (generic is! String) {
+        throw PluginRejected(
+          '$path: the condition "$name" has "predicate: $generic", and that is the name of a '
+          'registered condition',
+        );
+      }
+
+      final Map<String, Object> values = <String, Object>{};
+      for (final MapEntry<Object?, Object?> given in body.entries) {
+        if (given.key == 'predicate') {
+          continue;
+        }
+        final Object? key = given.key;
+        if (key is! String) {
+          throw PluginRejected(
+            '$path: the condition "$name" has a value named "$key", which is '
+            'not a name',
+          );
+        }
+        values[key] = _value(given.value, condition: name, key: key, path: path);
+      }
+      conditions[name] = ConditionBinding(predicate: generic, values: values);
+    }
+    return conditions;
+  }
+
+  /// [written] as the framework holds a value, or a refusal naming where it stands.
+  ///
+  /// Scalars and lists of scalars, and nothing else. A nesting deeper than that is refused rather
+  /// than flattened: a value nobody can see the shape of in the file is a value nobody can predict.
+  static Object _value(
+    Object? written, {
+    required String condition,
+    required String key,
+    required String path,
+  }) {
+    if (written is YamlList) {
+      final List<String> texts = <String>[];
+      for (final Object? each in written) {
+        if (each is! String && each is! int && each is! bool) {
+          throw PluginRejected(
+            '$path: the condition "$condition" gives "$key" a list holding "$each", and a list '
+            'holds text',
+          );
+        }
+        texts.add('$each');
+      }
+      return texts;
+    }
+    if (written is String || written is int || written is bool) {
+      return written!;
+    }
+    throw PluginRejected(
+      '$path: the condition "$condition" gives "$key" the value "$written", and a value is text, a '
+      'whole number, true or false, or a list of text',
     );
   }
 

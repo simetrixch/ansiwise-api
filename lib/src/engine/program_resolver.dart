@@ -100,6 +100,17 @@ final class ProgramResolver {
           problems.add('$where: no predicate is registered under "$name"');
           continue;
         }
+        if (predicate.takesArguments) {
+          // A generic condition is the same code pointed at different facts, and a program row is a
+          // list of bare names with nowhere to say which facts. Naming it directly would leave the
+          // condition reading nothing, which is a condition that cannot answer — so it is refused
+          // here, and the installation's configuration is where a name for it is made.
+          problems.add(
+            '$where: "$name" has to be told what to look at, and it is a name a program row '
+            'cannot tell — give it a name of its own in the configuration and write that name here',
+          );
+          continue;
+        }
         when.add(predicate);
       }
 

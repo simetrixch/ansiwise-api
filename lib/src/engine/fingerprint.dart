@@ -29,6 +29,9 @@ import '../domain/resolved_program.dart';
 ///   the one before it. A row is only ever bound to a measurement the resolver found an earlier row
 ///   publishing, and only ever on an argument the step declares — which is what makes walking the
 ///   DECLARED arguments below enough to see every wiring there is
+/// - **every condition a row is gated on, and what that condition was pointed at** — a generic
+///   condition is named by the installation and told what to look at there, so the name alone says
+///   only half of what decides whether a row runs
 /// - **the commit** the branch is on, because the same program at a different commit is a different
 ///   set of steps
 ///
@@ -93,6 +96,13 @@ String fingerprintOf({
     }
     for (final RegisteredPredicate predicate in step.when) {
       _field(material, 'when', predicate.name.value);
+      // What the condition was pointed at, where an installation pointed it. The name alone would
+      // make two installations that gate on the same word and read different facts hash alike, and
+      // then a clean dry run of one would admit a real run of the other. Sorted, so the order the
+      // configuration file happened to write the keys in is not part of the input.
+      for (final String value in predicate.bound.names.toList()..sort()) {
+        _valued(material, 'when.${predicate.name.value}.$value', predicate.bound.raw(value));
+      }
     }
   }
 
