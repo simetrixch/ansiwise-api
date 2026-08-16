@@ -1,4 +1,5 @@
 import 'arguments.dart';
+import 'value_shape.dart';
 
 /// Checks values against the specifications that declare them, and names every problem at once.
 ///
@@ -24,13 +25,18 @@ List<String> argumentProblems({
   final List<String> problems = <String>[];
   final Set<String> known = declared.map((ArgumentSpec s) => s.name).toSet();
 
-  final RegExp hostnamePattern = RegExp(r'^[a-z0-9-]+(\.[a-z0-9-]+)+$');
-  final RegExp mailboxPattern = RegExp(r'^[^@]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+$');
-
+  // A name nothing implements is a REFUSAL and never a pass. It used to answer true with a comment
+  // saying the loader should have stopped it — so a shape that slipped past the loader was accepted
+  // for every value, and the run read exactly like one where every value had been checked.
   bool checkShape(String shape, String text) {
-    if (shape == 'hostname') return hostnamePattern.hasMatch(text);
-    if (shape == 'mailbox') return mailboxPattern.hasMatch(text);
-    return true; // Should be prevented by loader
+    final ValueShape? known = ValueShape.named(shape);
+    if (known == null) {
+      throw StateError(
+        '"$shape" is not a shape anything here can check, and it reached the check anyway — the '
+        'shapes are ${ValueShape.allWritten.join(', ')}',
+      );
+    }
+    return known.holds(text);
   }
 
   for (final ArgumentSpec spec in declared) {

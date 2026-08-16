@@ -13,11 +13,20 @@ bool isCidr(String value) => _Range.parse(value) != null;
 /// Two ranges overlap exactly when their network addresses are equal under the SHORTER of the two
 /// prefixes. The obvious implementation — testing whether one contains the other's network address
 /// — gets containment right in one direction and wrong in the other.
+/// **A range this cannot read is a REFUSAL and never an answer.** It used to report "no overlap",
+/// which is the answer that lets the caller carry on: a step refusing a range that collides with the
+/// machine's own network passed on a typo, and every reader of that run saw a check that had run and
+/// found nothing. Ask [isCidr] first where a value may legitimately not be one.
 bool cidrOverlap(String left, String right) {
   final _Range? a = _Range.parse(left);
   final _Range? b = _Range.parse(right);
   if (a == null || b == null) {
-    return false;
+    final String unreadable = a == null ? left : right;
+    throw FormatException(
+      'this is not an address range, so whether it overlaps anything cannot be answered — a range '
+      'is a dotted quad, a slash and a prefix length of 0 to 32',
+      unreadable,
+    );
   }
   final int prefix = a.prefix < b.prefix ? a.prefix : b.prefix;
   final int mask = prefix == 0 ? 0 : (((1 << 32) - (1 << (32 - prefix))) & 0xFFFFFFFF);
@@ -25,6 +34,9 @@ bool cidrOverlap(String left, String right) {
 }
 
 /// Whether [address] — a dotted quad with no prefix — lies inside [cidr].
+///
+/// Refuses on either side being unreadable, for the reason [cidrOverlap] gives. A caller holding an
+/// address it read off a machine asks [isCidr] about it first.
 bool cidrContains(String cidr, String address) => cidrOverlap(cidr, '$address/32');
 
 /// One IPv4 range, as an address and a prefix length.

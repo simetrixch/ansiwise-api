@@ -19,6 +19,7 @@ import 'package:yaml/yaml.dart';
 
 import '../domain/answers.dart';
 import '../domain/arguments.dart';
+import '../domain/value_shape.dart';
 import '../domain/program.dart';
 import '../model/failures.dart';
 import '../model/names.dart';
@@ -241,8 +242,14 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
         );
         continue;
       }
-      if (shapeNode is! String || (shapeNode != 'hostname' && shapeNode != 'mailbox')) {
-        refusals.add(line, '"$name": "shape" is "$shapeNode", and it is hostname or mailbox');
+      // The set of shapes is ValueShape's and not this file's. Written out here as well, the two
+      // would drift the first time a shape is added, and the way that shows is the worst kind: the
+      // loader accepts the declaration and the check quietly passes every value.
+      if (shapeNode is! String || ValueShape.named(shapeNode) == null) {
+        refusals.add(
+          line,
+          '"$name": "shape" is "$shapeNode", and it is one of ${ValueShape.allWritten.join(', ')}',
+        );
         continue;
       }
       shape = shapeNode;
