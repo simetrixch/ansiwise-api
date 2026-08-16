@@ -16,6 +16,15 @@ enum ArgumentKind {
 
   /// The name of an answer.
   answerName,
+
+  /// A mapping of a name to a small declaration under it.
+  ///
+  /// For the case a list cannot carry: a row that has to say WHICH of several things each of
+  /// several names is filled from. A key on the left, a mapping of named slots on the right, and
+  /// nothing that evaluates — no expression, no condition, no reference to another key. The step
+  /// that declares one says in its own words which slots it reads and refuses anything else, the
+  /// way it refuses an argument it does not declare.
+  mapping,
 }
 
 /// The condition that determines whether an answer must be provided.
@@ -126,6 +135,7 @@ final class ArgumentSpec {
     ArgumentKind.integer => value is int,
     ArgumentKind.flag => value is bool,
     ArgumentKind.textList => value is List<String>,
+    ArgumentKind.mapping => value is Map<String, Object?>,
   };
 
   /// Whether [value] is one of the values this argument may hold.
