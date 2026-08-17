@@ -109,17 +109,26 @@ final class Command {
 
   /// Describes a command that only looks at the machine.
   ///
-  /// A shorthand, and it fixes [elevated] to false because a constructor cannot take both a
-  /// positional list and a named flag. An observing command that needs root IS expressible and is
-  /// written with [Command.detailed], setting `observes: true` and `elevated: true` — the two are
-  /// independent, and a check that has to read something only root can read stays a command a dry
-  /// run may perform.
-  const Command.observing(this.executable, [this.arguments = const <String>[]])
-    : workingDirectory = null,
-      environment = const <String, String>{},
-      observes = true,
-      elevated = false,
-      timeout = null;
+  /// **[elevated] IS ASKED HERE, and that is the whole reason this constructor changed shape.** It
+  /// used to take its arguments positionally, which meant it could not take a named flag beside
+  /// them — so it fixed elevation to false, and a caller writing "this only looks" got "and it runs
+  /// as you" without choosing it. That default was a limitation of the constructor, never a
+  /// decision, and it cost two steps on real machines: one asked sshd for its configuration and was
+  /// told Permission denied, the other asked a cluster whether it was running and waited fifteen
+  /// minutes for an answer it was not allowed to read.
+  ///
+  /// **Observing and elevated are independent.** Running as root does not make a command change
+  /// anything — it makes it able to READ — so a check that has to read something only root may read
+  /// is still a command a dry run may perform. That is what makes both flags true a legitimate
+  /// pair rather than a contradiction.
+  const Command.observing(
+    this.executable, {
+    this.arguments = const <String>[],
+    this.elevated = false,
+  }) : workingDirectory = null,
+       environment = const <String, String>{},
+       observes = true,
+       timeout = null;
 
   /// What is run.
   final String executable;
