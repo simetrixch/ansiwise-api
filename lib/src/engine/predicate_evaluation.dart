@@ -1,3 +1,4 @@
+import '../domain/arguments.dart';
 import '../domain/machine.dart';
 import '../domain/predicate.dart';
 import '../domain/recorder.dart';
@@ -21,7 +22,12 @@ import 'planning_ports.dart';
 /// written by accident: the port refuses it.
 final class PredicateEvaluation {
   /// Creates an evaluation against [machine], reporting to [recorder].
-  const PredicateEvaluation({required this.machine, required this.recorder, required this.log});
+  const PredicateEvaluation({
+    required this.machine,
+    required this.recorder,
+    required this.log,
+    this.answers = Arguments.none,
+  });
 
   /// What the conditions look at.
   final Machine machine;
@@ -31,6 +37,9 @@ final class PredicateEvaluation {
 
   /// Where a condition's own log lines go.
   final Logger log;
+
+  /// What this run was told, for a condition pointed at a file named for this installation.
+  final Arguments answers;
 
   /// Measures every condition [program] uses and returns the answers.
   Future<Facts> evaluate(ResolvedProgram program) async {
@@ -73,6 +82,7 @@ final class PredicateEvaluation {
       http: PlanningHttp(machine.http, step: owner),
       clock: machine.clock,
       log: log,
+      answers: answers,
     );
   }
 }

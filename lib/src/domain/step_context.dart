@@ -23,6 +23,7 @@ base class PredicateContext {
     required this.http,
     required this.clock,
     required this.log,
+    this.answers = Arguments.none,
   });
 
   /// Running a command.
@@ -36,6 +37,21 @@ base class PredicateContext {
 
   /// Asking the time and waiting.
   final Clock clock;
+
+  /// What this run was told about the installation it measures.
+  ///
+  /// **A condition that reads a per-installation file has to know WHICH installation.** The files an
+  /// installation states itself in are named for its stage — one file per stage and never a folder
+  /// per stage — so a condition pointed at one of them by a path with the stage written into it is a
+  /// condition that is right on exactly one machine. Given the answers it can be pointed at the
+  /// stage this run holds instead, and be right everywhere.
+  ///
+  /// **A STEP reads an answer BY NAME and never finds it substituted into its arguments.**
+  /// Substitution would mean a program file that computes, and a file that computes is a file being
+  /// debugged instead of the code. What a condition needs is the narrow exception and stays one: the
+  /// path of the file it reads, which is a fact about the installation rather than a value it acts
+  /// on.
+  final Arguments answers;
 
   /// Saying something in the record.
   final Logger log;
@@ -51,7 +67,7 @@ base class PredicateContext {
 final class StepContext extends PredicateContext {
   /// Creates the context a step runs in.
   const StepContext({
-    this.answers = Arguments.none,
+    super.answers,
     this.measurements = MeasurementSink.none,
     required super.shell,
     required super.files,
@@ -77,13 +93,6 @@ final class StepContext extends PredicateContext {
 
   /// The values the program gave this step, already validated against what it declared.
   final Arguments arguments;
-
-  /// What the operator supplied for this run, already checked against the declaration.
-  ///
-  /// A step reads an answer BY NAME rather than finding it substituted into its arguments.
-  /// Substitution would mean a program file that computes, and a file that computes is a file
-  /// being debugged instead of the code.
-  final Arguments answers;
 
   /// Where this step publishes what it measured, for a later row to take.
   ///

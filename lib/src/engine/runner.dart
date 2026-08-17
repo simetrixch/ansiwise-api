@@ -97,7 +97,7 @@ final class Runner {
             RunStarted(sequence: sequence, at: at, program: program.declared.name, mode: mode.flag),
       );
 
-      final Facts facts = await _measure(program);
+      final Facts facts = await _measure(program, answers);
       final _Walk walk = await _walkSteps(program, mode, facts, answers);
 
       // What the run applied and did not take back. Empty unless the unwind was turned off, which
@@ -198,14 +198,19 @@ final class Runner {
     }
   }
 
-  Future<Facts> _measure(ResolvedProgram program) {
+  Future<Facts> _measure(ResolvedProgram program, Arguments answers) {
     final Logger log = RecordingLogger(
       recorder: recorder,
       redactor: redactor,
       step: const StepName('when'),
       threshold: logLevel,
     );
-    return PredicateEvaluation(machine: machine, recorder: recorder, log: log).evaluate(program);
+    return PredicateEvaluation(
+      machine: machine,
+      recorder: recorder,
+      log: log,
+      answers: answers,
+    ).evaluate(program);
   }
 
   Future<_Walk> _walkSteps(
