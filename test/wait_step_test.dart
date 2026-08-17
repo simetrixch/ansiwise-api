@@ -83,7 +83,7 @@ final class _WaitsForTheAbsent extends ObservingStep with WaitStep {
   String get waitingFor => 'the thing to come up';
 
   @override
-  Future<bool> holds(StepContext context) async =>
+  Future<({bool held, String? saw})> holds(StepContext context) async =>
       throw const ProcessException('no-such-executable', <String>['status'], 'No such file');
 }
 
@@ -100,7 +100,7 @@ final class _WaitsForSomethingFalse extends ObservingStep with WaitStep {
   String get waitingFor => 'the thing to come up';
 
   @override
-  Future<bool> holds(StepContext context) async => false;
+  Future<({bool held, String? saw})> holds(StepContext context) async => (held: false, saw: null);
 }
 
 final class _WaitsForSomethingTrue extends ObservingStep with WaitStep {
@@ -116,7 +116,7 @@ final class _WaitsForSomethingTrue extends ObservingStep with WaitStep {
   String get waitingFor => 'the thing to come up';
 
   @override
-  Future<bool> holds(StepContext context) async => true;
+  Future<({bool held, String? saw})> holds(StepContext context) async => (held: true, saw: null);
 }
 
 final class _SilentLog implements Logger {

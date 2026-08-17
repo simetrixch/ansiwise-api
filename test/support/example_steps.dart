@@ -220,11 +220,13 @@ final class WaitsOnTheRowsWord extends ObservingStep with WaitStep {
   String get waitingFor => 'the command the row names to answer';
 
   @override
-  Future<bool> holds(StepContext context) async {
+  Future<({bool held, String? saw})> holds(StepContext context) async {
     final CommandResult answered = await context.shell.run(
       Command.detailed(command, observes: true, timeout: deadline),
     );
-    return answered.ok && answered.trimmed.isNotEmpty;
+    return answered.ok && answered.trimmed.isNotEmpty
+        ? (held: true, saw: null)
+        : (held: false, saw: 'it answered "${answered.trimmed}"');
   }
 }
 

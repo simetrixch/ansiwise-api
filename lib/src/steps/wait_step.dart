@@ -24,8 +24,16 @@ base mixin WaitStep on Step {
   /// What is being waited for, in the operator's words, for the plan and for the failure.
   String get waitingFor;
 
-  /// Asks once. Must change nothing.
-  Future<bool> holds(StepContext context);
+  /// Asks once, and says what it SAW where the answer was not the one waited for. Must change
+  /// nothing.
+  ///
+  /// **`saw` is the difference between a timeout and a diagnosis.** A wait that reports only true or
+  /// false throws away the one thing the machine said: on the run this was written for, a cluster
+  /// answered within a second that a certificate authority had refused the mailbox by name, and the
+  /// step reported "waited 60s and it did not happen" — sending an operator to look at a service
+  /// that was working perfectly. Whatever the ask read instead of the answer belongs in `saw`,
+  /// trimmed to what an operator can act on, and null where there is genuinely nothing to add.
+  Future<({bool held, String? saw})> holds(StepContext context);
 
   /// Whether the wait is over, on a machine that may not carry what does the asking yet.
   ///
@@ -48,7 +56,8 @@ base mixin WaitStep on Step {
   /// step that waits.
   Future<({bool held, String? notAskable})> _ask(StepContext context) async {
     try {
-      return (held: await holds(context), notAskable: null);
+      final ({bool held, String? saw}) asked = await holds(context);
+      return (held: asked.held, notAskable: asked.saw);
     } on Object catch (why) {
       // The WHOLE reason, with its line breaks folded, because the useful half is usually not on
       // the first line: a failure to start a process names the error there and the command it could
@@ -74,9 +83,10 @@ base mixin WaitStep on Step {
         return;
       }
       if (!context.clock.now().isBefore(giveUp)) {
-        // The reason the last ask could not be put, where there was one. Without it an operator
-        // whose command name is wrong is told the service did not come up, and goes looking at a
-        // service rather than at the row.
+        // The reason the last ask could not be put, OR what it read instead of the answer, where
+        // there was one. Without it an operator whose command name is wrong is told the service did
+        // not come up, and goes looking at a service rather than at the row — and an operator whose
+        // machine stated the refusal in words is told only how long the waiting took.
         throw WaitedTooLong(
           waitingFor: asked.notAskable == null ? waitingFor : '$waitingFor — ${asked.notAskable}',
           deadline: deadline,
