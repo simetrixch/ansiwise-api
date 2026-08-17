@@ -237,27 +237,33 @@ final class Arguments {
   }
 }
 
-/// The argument a step declares when the file it is pointed at may belong to root.
+/// The argument a step declares when what it is pointed at may be reachable only as root.
 ///
-/// **Written once because it is the same question everywhere.** Whether a path belongs to root is a
-/// property of that PATH, and a step is pointed at one by its row — so the row answers, and a step
-/// that decided for every caller would be a package knowing something about the product that used
-/// it. Twenty-eight steps ask it, and twenty-eight copies of the same paragraph would disagree with
-/// each other within a month.
+/// **Written once because it is the same question everywhere.** Whether a path belongs to root, or
+/// whether a tool refuses the account the run started as, is a property of the MACHINE and of what
+/// the row pointed the step at — so the row answers, and a step that decided for every caller would
+/// be a package knowing something about the product that used it. Twenty-eight steps ask it, and
+/// twenty-eight copies of the same paragraph would disagree with each other within a month.
+///
+/// **It covers both ports, and one without the other is the failure to look for.** A step that reads
+/// through the shell and writes through the file port needs the same answer on both; a step that
+/// ASKS as the operator and ACTS as root gets an answer that is not the one it waits for, because a
+/// refused tool very often writes the refusal on its output and exits zero.
 ///
 /// **Reading and writing as root does not make either act anything else.** A read stays a read, so a
 /// dry run performs it; a write stays a write, so a dry run refuses it. Elevation says what may be
 /// REACHED, never whether anything changes.
 ///
 /// A step declares it by putting this in its own argument list, carries it as a field, and passes it
-/// to every call it makes on the file port. Passing it to some and not others is the failure that
-/// cost twelve machine runs to find five occurrences of: the call the row is obviously about carried
-/// it, and the backup written beside it did not.
+/// to every call it makes. Passing it to some and not others is the failure that cost twelve machine
+/// runs to find five occurrences of: the call the row is obviously about carried it, and the backup
+/// written beside it did not.
 const ArgumentSpec elevationArgument = ArgumentSpec(
   name: 'elevated',
   kind: ArgumentKind.flag,
   required: false,
   describes:
-      'whether the file this row points at belongs to root, so that reading and writing it need '
-      'elevation. Leave it off for a path the account running the program owns',
+      'whether what this row points at is reachable only as root — a file root owns, or a tool that '
+      'refuses the account the run started as. Leave it off where the account running the program '
+      'owns the path and the tool answers it',
 );
