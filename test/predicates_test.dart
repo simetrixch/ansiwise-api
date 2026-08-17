@@ -115,12 +115,12 @@ void main() {
               'writes': ('x:1', (Arguments a) => WritesAFile(path: '/x', content: 'x')),
             },
             predicates: <String, Predicate>{
-              'vault_enabled': const CannotSay('/etc/subject/settings is not on this machine'),
+              'feature_enabled': const CannotSay('/etc/subject/settings is not on this machine'),
             },
           ),
         ).resolve(
           programOf('p', <(String, OnFailure, List<String>)>[
-            ('writes', OnFailure.exit, <String>['vault_enabled']),
+            ('writes', OnFailure.exit, <String>['feature_enabled']),
           ]),
         );
 
