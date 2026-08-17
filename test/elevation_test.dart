@@ -224,4 +224,76 @@ void main() {
       expect(harness.recorder.only<CommandStarted>().single.argv, <String>['a-tool', 'upgrade']);
     });
   });
+
+  group('the variables a command was promised reach it, elevated too', () {
+    // The contract says "variables added to the environment the command sees". For an elevated one
+    // that was false: they were set on the SUDO process, sudo resets what it passes on, and the
+    // command ran without them. Nothing refused and nothing warned — the failure appears wherever
+    // the variable mattered, arbitrarily far from the line that set it.
+    //
+    // It is not theoretical. A package install passes DEBIAN_FRONTEND=noninteractive and runs as
+    // root, so an unattended run was one config-file question away from stopping at a prompt nobody
+    // would ever answer.
+    test('a command with variables is run through env, as root, on the far side of the reset', () {
+      const Command install = Command.detailed(
+        'apt-get',
+        arguments: <String>['install', '--yes', 'a-tool'],
+        environment: <String, String>{'DEBIAN_FRONTEND': 'noninteractive'},
+        elevated: true,
+      );
+
+      expect(elevatedArgumentsFor(install), <String>[
+        ...RealShell.elevatedPrefix,
+        'env',
+        'DEBIAN_FRONTEND=noninteractive',
+        'apt-get',
+        'install',
+        '--yes',
+        'a-tool',
+      ]);
+    });
+
+    test('THE INNOCENT NEIGHBOUR: a command with none is not run through env', () {
+      // Without this, wrapping unconditionally would pass the assertion above while putting a second
+      // executable in front of every elevated command on every machine, for nothing.
+      const Command plain = Command.detailed(
+        'apt-get',
+        arguments: <String>['update'],
+        elevated: true,
+      );
+
+      expect(elevatedArgumentsFor(plain), <String>[
+        ...RealShell.elevatedPrefix,
+        'apt-get',
+        'update',
+      ]);
+      expect(elevatedArgumentsFor(plain), isNot(contains('env')));
+    });
+
+    test('several variables are all set, in the order the command gave them', () {
+      const Command many = Command.detailed(
+        'a-tool',
+        environment: <String, String>{'ONE': '1', 'TWO': '2'},
+        elevated: true,
+      );
+
+      final List<String> argv = elevatedArgumentsFor(many);
+      // After `env` and before the executable, which is where a variable belongs and where the
+      // sudo prefix's own `--prompt=` is not.
+      final int from = argv.indexOf('env') + 1;
+      expect(argv.sublist(from, argv.indexOf('a-tool')), <String>['ONE=1', 'TWO=2']);
+    });
+
+    test('a value that is empty is still SET, rather than dropped', () {
+      // Setting a variable to nothing and leaving it unset are different states to whatever reads
+      // it, and the caller asked for the first.
+      const Command empty = Command.detailed(
+        'a-tool',
+        environment: <String, String>{'QUIET': ''},
+        elevated: true,
+      );
+
+      expect(elevatedArgumentsFor(empty), contains('QUIET='));
+    });
+  });
 }

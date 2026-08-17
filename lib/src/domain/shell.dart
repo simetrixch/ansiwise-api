@@ -139,6 +139,12 @@ final class Command {
   final String? workingDirectory;
 
   /// Variables added to the environment the command sees.
+  ///
+  /// ADDED, not replacing: what the run itself was started with is passed through and these are set
+  /// on top. And they reach the command in BOTH cases, elevated or not — which took work to be true
+  /// rather than merely written here, because sudo resets the environment it passes on and once
+  /// stripped a package installer's own "do not ask me anything" one command before apt would have
+  /// asked.
   final Map<String, String> environment;
 
   /// Whether this command only looks at the machine and changes nothing.

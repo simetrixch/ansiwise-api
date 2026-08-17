@@ -38,7 +38,7 @@ final class RealShell implements Shell {
   /// same whether or not somebody typed a password on that machine minutes ago. `--prompt=` empties
   /// the prompt, so nothing is written to standard error that a step would then record as output.
   /// `--` ends the options, so a command whose own name begins with a dash is still the command.
-  static const List<String> _elevatedPrefix = <String>[
+  static const List<String> elevatedPrefix = <String>[
     '--stdin',
     '--reset-timestamp',
     '--prompt=',
@@ -66,7 +66,7 @@ final class RealShell implements Shell {
         );
       }
       executable = 'sudo';
-      arguments = <String>[..._elevatedPrefix, command.executable, ...command.arguments];
+      arguments = elevatedArgumentsFor(command);
     } else {
       password = null;
       executable = command.executable;
@@ -79,6 +79,11 @@ final class RealShell implements Shell {
       workingDirectory: command.workingDirectory,
       // Added to the environment rather than replacing it: null means the parent's environment is
       // passed through unchanged, and a map is merged on top of it.
+      //
+      // For an ELEVATED command this reaches sudo and no further — sudo resets what it passes on —
+      // so the same pair is set again above, on the far side of that reset. It stays here as well
+      // because sudo itself reads its own environment, and a variable meant for the command is
+      // harmless there.
       environment: command.environment.isEmpty ? null : command.environment,
       runInShell: false,
     );
@@ -146,3 +151,28 @@ final class RealShell implements Shell {
     }
   }
 }
+
+/// What `sudo` is given so that [command] runs as root AND sees the variables it was promised.
+///
+/// Named and separate because it is a decision rather than plumbing, and a decision nothing could
+/// assert until it had a name: every test of an elevated command started a real process or nothing
+/// at all.
+///
+/// **`env` appears wherever the command carries variables, and only then.** sudo resets the
+/// environment it passes on — that is its purpose, and asking an installation to weaken it in its
+/// sudoers would trade a real guarantee for a convenience. So the variables are set on the far side
+/// of that reset: `env` runs as root, sets them, and execs the command.
+///
+/// Measured before this existed: a package install passed its own "do not ask me anything" and ran
+/// as root, the variable was stripped, and apt was one config-file question away from stopping an
+/// unattended run at a prompt nobody would ever answer.
+List<String> elevatedArgumentsFor(Command command) => <String>[
+  ...RealShell.elevatedPrefix,
+  if (command.environment.isNotEmpty) ...<String>[
+    'env',
+    for (final MapEntry<String, String> each in command.environment.entries)
+      '${each.key}=${each.value}',
+  ],
+  command.executable,
+  ...command.arguments,
+];
