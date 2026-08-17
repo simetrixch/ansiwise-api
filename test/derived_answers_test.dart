@@ -263,4 +263,151 @@ void main() {
       );
     });
   });
+
+  group('a rule that reads a PAIR of answers', () {
+    // The relation nobody types. Whether this cluster is also the one that builds is answered twice
+    // over — both addresses are supplied — and a third answer stating whether they match would be
+    // the same fact in two places, which is a pair that can disagree and fail much later.
+    ArgumentSpec pair(String name, DerivationRule rule, String from, String and) => ArgumentSpec(
+      name: name,
+      kind: ArgumentKind.text,
+      describes: 'the $name',
+      required: false,
+      derivation: Derivation(rule: rule, from: from, and: and),
+    );
+
+    DeclaredAnswers program(DerivationRule rule) => DeclaredAnswers(<ArgumentSpec>[
+      text('fqdn'),
+      text('build_plane'),
+      pair('registry_is_local', rule, 'build_plane', 'fqdn'),
+    ]);
+
+    test('THE INNOCENT CASE: two equal answers work out to the word true', () {
+      final Arguments answers = program(DerivationRule.sameAs).validate(<String, Object?>{
+        'fqdn': 'm1.example.com',
+        'build_plane': 'm1.example.com',
+      }, program: 'p');
+
+      expect(answers.text('registry_is_local'), 'true');
+    });
+
+    test('two different answers work out to the word false', () {
+      final Arguments answers = program(DerivationRule.sameAs).validate(<String, Object?>{
+        'fqdn': 'm1.example.com',
+        'build_plane': 'b1.example.com',
+      }, program: 'p');
+
+      expect(answers.text('registry_is_local'), 'false');
+    });
+
+    test('the other direction is its own rule, not a negation somewhere else', () {
+      final Arguments answers = program(DerivationRule.differsFrom).validate(<String, Object?>{
+        'fqdn': 'm1.example.com',
+        'build_plane': 'b1.example.com',
+      }, program: 'p');
+
+      expect(answers.text('registry_is_local'), 'true');
+    });
+
+    test('the two rules never answer alike on one pair', () {
+      // Without this, a version that answered the same way for both would pass every assertion
+      // above that drives only one of them.
+      for (final String plane in <String>['m1.example.com', 'b1.example.com']) {
+        final Map<String, Object?> given = <String, Object?>{
+          'fqdn': 'm1.example.com',
+          'build_plane': plane,
+        };
+        expect(
+          program(DerivationRule.sameAs).validate(given, program: 'p').text('registry_is_local'),
+          isNot(
+            program(
+              DerivationRule.differsFrom,
+            ).validate(given, program: 'p').text('registry_is_local'),
+          ),
+          reason: 'on build_plane=$plane',
+        );
+      }
+    });
+
+    test('a pair rule given only one name is REFUSED, not measured against nothing', () {
+      // The dangerous shape. Against the empty string the relation answers "false", which reads as
+      // a measurement of the machine rather than as a declaration nobody finished.
+      final DeclaredAnswers half = DeclaredAnswers(<ArgumentSpec>[
+        text('fqdn'),
+        text('build_plane'),
+        ArgumentSpec(
+          name: 'registry_is_local',
+          kind: ArgumentKind.text,
+          describes: 'the relation',
+          required: false,
+          derivation: const Derivation(rule: DerivationRule.sameAs, from: 'build_plane'),
+        ),
+      ]);
+
+      expect(
+        () => half.validate(<String, Object?>{
+          'fqdn': 'm1.example.com',
+          'build_plane': 'm1.example.com',
+        }, program: 'p'),
+        throwsA(
+          isA<AnswersRejected>().having(
+            (AnswersRejected refused) => refused.message,
+            'message',
+            contains('PAIR'),
+          ),
+        ),
+      );
+    });
+
+    test('a one-answer rule given a second name is REFUSED', () {
+      final DeclaredAnswers extra = DeclaredAnswers(<ArgumentSpec>[
+        text('fqdn'),
+        text('build_plane'),
+        pair('label', DerivationRule.firstDnsLabel, 'fqdn', 'build_plane'),
+      ]);
+
+      expect(
+        () => extra.validate(<String, Object?>{
+          'fqdn': 'm1.example.com',
+          'build_plane': 'b1.example.com',
+        }, program: 'p'),
+        throwsA(isA<AnswersRejected>()),
+      );
+    });
+
+    test('THE SECOND SOURCE IS HELD TO WHAT THE FIRST IS: undeclared is refused', () {
+      final DeclaredAnswers nowhere = DeclaredAnswers(<ArgumentSpec>[
+        text('build_plane'),
+        pair('registry_is_local', DerivationRule.sameAs, 'build_plane', 'nowhere'),
+      ]);
+
+      expect(
+        () => nowhere.validate(<String, Object?>{'build_plane': 'm1.example.com'}, program: 'p'),
+        throwsA(
+          isA<AnswersRejected>().having(
+            (AnswersRejected refused) => refused.message,
+            'message',
+            contains('nowhere'),
+          ),
+        ),
+      );
+    });
+
+    test('and a chain through the second source is refused too', () {
+      final DeclaredAnswers chained = DeclaredAnswers(<ArgumentSpec>[
+        text('fqdn'),
+        text('build_plane'),
+        derived('label', DerivationRule.firstDnsLabel, 'fqdn'),
+        pair('registry_is_local', DerivationRule.sameAs, 'build_plane', 'label'),
+      ]);
+
+      expect(
+        () => chained.validate(<String, Object?>{
+          'fqdn': 'm1.example.com',
+          'build_plane': 'm1',
+        }, program: 'p'),
+        throwsA(isA<AnswersRejected>()),
+      );
+    });
+  });
 }

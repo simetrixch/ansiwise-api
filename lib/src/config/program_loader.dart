@@ -330,6 +330,7 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
     // from. Both or neither: half of it is a declaration nobody can act on.
     final Object? derivedNode = entry['derived'];
     final Object? fromNode = entry['from'];
+    final Object? andNode = entry['and'];
     Derivation? derivation;
     if (derivedNode != null || fromNode != null) {
       if (derivedNode == null || fromNode == null) {
@@ -370,7 +371,27 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
         refusals.add(line, '"$name": "from" is the name of the answer this one is worked out from');
         continue;
       }
-      derivation = Derivation(rule: DerivationRule.named(derivedNode)!, from: fromNode);
+      final DerivationRule rule = DerivationRule.named(derivedNode)!;
+      if (rule.sources == 2 && (andNode is! String || andNode.isEmpty)) {
+        refusals.add(
+          line,
+          '"$name": "$derivedNode" reads a PAIR of answers, so "and" is the name of the second one',
+        );
+        continue;
+      }
+      if (rule.sources == 1 && andNode != null) {
+        refusals.add(
+          line,
+          '"$name": "$derivedNode" reads one answer, and "and" names a second that nothing would '
+          'read — a name sitting there looking as though it did',
+        );
+        continue;
+      }
+      derivation = Derivation(
+        rule: rule,
+        from: fromNode,
+        and: rule.sources == 2 ? andNode! as String : null,
+      );
     }
 
     final Object? unwrapped = fallback is YamlList
@@ -482,6 +503,7 @@ const Set<String> _answerKeys = <String>{
   'stated_when',
   'derived',
   'from',
+  'and',
   'default_from',
 };
 

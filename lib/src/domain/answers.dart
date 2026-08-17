@@ -177,6 +177,53 @@ final class DeclaredAnswers {
         );
         continue;
       }
+      // The SECOND source, for a rule that reads a pair. Held to exactly what the first is held to,
+      // and the count is checked here rather than at the rule: a rule that reads a pair and is
+      // given one name would otherwise work out a relation against the empty string, which answers
+      // "false" and looks like a measurement.
+      if (how.rule.sources == 2) {
+        final String? second = how.and;
+        if (second == null) {
+          problems.add(
+            '$program: "${spec.name}" is worked out by "${how.rule.written}", which reads a PAIR of '
+            'answers, and only one was named — write the other under "and"',
+          );
+          continue;
+        }
+        final ArgumentSpec? other = named(second);
+        if (other == null) {
+          problems.add(
+            '$program: "${spec.name}" is worked out from "$second", and this program declares no '
+            'such answer',
+          );
+          continue;
+        }
+        if (other.isDerived) {
+          problems.add(
+            '$program: "${spec.name}" is worked out from "$second", which is itself worked out — '
+            'a derived answer follows from one somebody supplied, so that no order of evaluation '
+            'has to be understood to read the file',
+          );
+          continue;
+        }
+        final Object? otherValue = answered.raw(second);
+        if (otherValue is! String) {
+          problems.add(
+            '$program: "${spec.name}" is worked out from "$second", which holds no text — '
+            '${otherValue == null ? 'nothing answered it' : 'it holds ${otherValue.runtimeType}'}',
+          );
+          continue;
+        }
+        worked[spec.name] = how.rule.applyTo(value, otherValue);
+        continue;
+      }
+      if (how.and != null) {
+        problems.add(
+          '$program: "${spec.name}" names a second answer under "and", and "${how.rule.written}" '
+          'reads one answer — a name nothing reads would sit there looking as though it did',
+        );
+        continue;
+      }
       worked[spec.name] = how.rule.applyTo(value);
     }
 

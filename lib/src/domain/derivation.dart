@@ -47,18 +47,37 @@ enum DerivationRule {
   /// naming which one keeps the books, where leaving it out means "this one". Written as a default
   /// rather than as a derivation, it fills only what was not answered, and the two are the same rule
   /// under two triggers: `derived` always, `default_from` where nothing was given.
-  itself('itself', _itself);
+  itself('itself', _itself),
+
+  /// Whether two answers hold the same text, as the word `true` or the word `false`.
+  ///
+  /// The relation a file gates on where nobody types the relation itself. Whether this cluster is
+  /// also the one that builds is such a fact: both addresses are answered, and a third answer
+  /// stating whether they match would be the same fact twice, which is a pair that can disagree.
+  ///
+  /// The two words and not a flag, because what reads it is a template slot, and a slot holds text.
+  sameAs('same_as', _sameAs, sources: 2),
+
+  /// Whether two answers hold different text, as the word `true` or the word `false`.
+  ///
+  /// The other direction, written out rather than reached by a negation somewhere else, for the
+  /// reason the conditions of a program are two names rather than one and a `not:`.
+  differsFrom('differs_from', _differsFrom, sources: 2);
 
   /// Declares a rule under the name a program file writes.
-  const DerivationRule(this.written, this._apply);
+  const DerivationRule(this.written, this._apply, {this.sources = 1});
 
   /// The name a program file writes for this rule.
   final String written;
 
-  final String Function(String) _apply;
+  final String Function(String, String) _apply;
+
+  /// How many answers this rule reads: one, or a pair.
+  final int sources;
 
   /// [source] under this rule.
-  String applyTo(String source) => _apply(source);
+  /// The value this rule works out. [other] is given exactly for the rules that read a pair.
+  String applyTo(String source, [String other = '']) => _apply(source, other);
 
   /// The rule [written] names, or null when nothing here is called that.
   ///
@@ -80,11 +99,15 @@ enum DerivationRule {
   ];
 }
 
-String _itself(String source) => source;
+String _itself(String source, String _) => source;
 
-String _firstDnsLabel(String source) => source.split('.').first;
+String _sameAs(String source, String other) => '${source == other}';
 
-String _withoutFirstDnsLabel(String source) {
+String _differsFrom(String source, String other) => '${source != other}';
+
+String _firstDnsLabel(String source, String _) => source.split('.').first;
+
+String _withoutFirstDnsLabel(String source, String _) {
   final int dot = source.indexOf('.');
   return dot < 0 ? source : source.substring(dot + 1);
 }
@@ -93,11 +116,14 @@ String _withoutFirstDnsLabel(String source) {
 @immutable
 final class Derivation {
   /// Declares that this answer is [rule] applied to the answer named [from].
-  const Derivation({required this.rule, required this.from});
+  const Derivation({required this.rule, required this.from, this.and});
 
   /// The rule that works it out.
   final DerivationRule rule;
 
   /// The name of the answer it is worked out from.
   final String from;
+
+  /// The name of the SECOND answer, for the rules that read a pair, and null for the rest.
+  final String? and;
 }
