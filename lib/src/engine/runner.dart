@@ -154,19 +154,29 @@ final class Runner {
       );
 
       return closed;
-    } on ConditionUnanswerable catch (refused) {
-      // A condition that could not be answered ends the run BEFORE any step, and the record has to
-      // say so. Without this the record kept no end and no exit code, so everything reading records
-      // afterwards showed a run still going while the process was already gone — measured on a
-      // machine, and the one outcome worse than failing.
+    } on Object catch (thrown) {
+      // ANYTHING THE ENGINE DOES NOT OTHERWISE HANDLE, and the reason it is caught this widely is
+      // measured rather than assumed. A record that is never closed says a run is still going, for
+      // ever, to everything that reads records afterwards — and the process that would have said
+      // otherwise is gone. That is worse than any failure the exception could describe.
+      //
+      // Twice on a machine: first a condition that could not be answered, then a step whose restart
+      // never came back. Each carried a message that said exactly what had happened, and each left
+      // a record claiming the run had not finished.
       //
       // Caught here rather than left to the caller because only this method holds the header the
-      // record is closed from.
+      // record is closed from. What was thrown becomes the run's single issue, so nothing about it
+      // is lost by being handled.
+      final String because = switch (thrown) {
+        ConditionUnanswerable(:final String because) => because,
+        final EngineFailure failure => failure.message,
+        _ => thrown.toString(),
+      };
       final RunRecord closed = header.closed(
         end: machine.clock.now(),
         exitCode: 1,
         steps: const <StepRecord>[],
-        issues: <String>[refused.because],
+        issues: <String>[because],
         leftStanding: const <String>[],
       );
       recorder.record(
@@ -174,7 +184,7 @@ final class Runner {
           sequence: sequence,
           at: at,
           exitCode: 1,
-          issues: <String>[refused.because],
+          issues: <String>[because],
           standings: closed.standings,
           leftStanding: const <String>[],
         ),

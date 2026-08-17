@@ -161,6 +161,38 @@ void main() {
       expect(h.files.written, isEmpty, reason: 'the refusal lands before the first step');
     });
 
+    test('AND SO DOES ANY OTHER FAILURE, which is what makes the record trustworthy', () async {
+      // The general case, found the same way as the one above and one step further along: a step
+      // whose restart never came back threw a plain state error, and the record stayed open with no
+      // end and no exit code. Every reader of records then showed a run still going while the
+      // process was gone — for ever, since nothing was left to correct it.
+      //
+      // What was thrown becomes the run's single issue, so handling it loses nothing.
+      final Harness h = Harness();
+      final ResolvedProgram program =
+          ProgramResolver(
+            registryOf(
+              steps: <String, (String, Step Function(Arguments))>{
+                'throws': ('x:1', (Arguments a) => const ThrowsSomethingElse()),
+              },
+            ),
+          ).resolve(
+            programOf('p', <(String, OnFailure, List<String>)>[
+              ('throws', OnFailure.exit, <String>[]),
+            ]),
+          );
+
+      final RunRecord record = await h.runner.run(
+        program: program,
+        mode: Mode.run,
+        header: h.header(),
+      );
+
+      expect(record.end, isNotNull);
+      expect(record.exitCode, isNot(0));
+      expect(record.issues.single, contains('the machine did not come back'));
+    });
+
     test('THE INNOCENT NEIGHBOUR: a condition that CAN answer still closes normally', () async {
       // Without this, a runner that treated every condition as unanswerable would pass all three
       // assertions above and no program with a `when:` would ever run.

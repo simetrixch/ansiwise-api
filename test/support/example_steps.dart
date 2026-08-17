@@ -160,6 +160,24 @@ final class CannotSay implements Predicate {
       throw ConditionUnanswerable(because);
 }
 
+/// A step that throws something the engine has no name for.
+final class ThrowsSomethingElse extends IrreversibleStep {
+  const ThrowsSomethingElse();
+
+  @override
+  String get irreversibleReason => 'it never gets far enough to change anything';
+
+  @override
+  Future<CheckResult> check(StepContext context) async => const CheckResult.ready();
+
+  @override
+  Future<StepPlan> plan(StepContext context) async => const StepPlan.nothing('would throw');
+
+  @override
+  Future<void> apply(StepContext context) async =>
+      throw StateError('the machine did not come back');
+}
+
 /// A step that only measures the machine and finds it as it should be.
 ///
 /// There is nothing to take it back from, which is exactly what makes it worth having here: a
