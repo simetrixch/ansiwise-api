@@ -154,7 +154,11 @@ final class RecordingFiles implements Files {
     required int mode,
     bool elevated = false,
   }) async {
-    final bool existed = await inner.exists(path);
+    // Asked the same way the write is made. Without the flag this is the ordinary reader, and a
+    // path only root may look at answers with a permission error — from the RECORDING wrapper, one
+    // line before the write that would have worked. Measured on a machine three runs in a row, each
+    // time reading as though the step had forgotten something it had not.
+    final bool existed = await inner.exists(path, elevated: elevated);
     await inner.write(path, content, mode: mode, elevated: elevated);
     recorder.record(
       (int sequence, DateTime at) => FileWritten(
@@ -170,7 +174,11 @@ final class RecordingFiles implements Files {
 
   @override
   Future<void> delete(String path, {bool elevated = false}) async {
-    final bool existed = await inner.exists(path);
+    // Asked the same way the write is made. Without the flag this is the ordinary reader, and a
+    // path only root may look at answers with a permission error — from the RECORDING wrapper, one
+    // line before the write that would have worked. Measured on a machine three runs in a row, each
+    // time reading as though the step had forgotten something it had not.
+    final bool existed = await inner.exists(path, elevated: elevated);
     await inner.delete(path, elevated: elevated);
     if (existed) {
       recorder.record(
@@ -187,7 +195,11 @@ final class RecordingFiles implements Files {
 
   @override
   Future<void> createDirectory(String path, {required int mode, bool elevated = false}) async {
-    final bool existed = await inner.exists(path);
+    // Asked the same way the write is made. Without the flag this is the ordinary reader, and a
+    // path only root may look at answers with a permission error — from the RECORDING wrapper, one
+    // line before the write that would have worked. Measured on a machine three runs in a row, each
+    // time reading as though the step had forgotten something it had not.
+    final bool existed = await inner.exists(path, elevated: elevated);
     await inner.createDirectory(path, mode: mode, elevated: elevated);
     if (!existed) {
       recorder.record(
