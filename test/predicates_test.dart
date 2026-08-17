@@ -103,6 +103,79 @@ void main() {
       expect(h.recorder.events, isEmpty);
     },
   );
+
+  group('a condition that cannot be answered', () {
+    // The THIRD outcome. Both cases of PredicateResult assert something about the machine, so a
+    // condition that could not read its input has to leave the run rather than pick one — answering
+    // "it does not hold" would switch off every step waiting on that name, in silence.
+    ResolvedProgram programThatCannotAsk() =>
+        ProgramResolver(
+          registryOf(
+            steps: <String, (String, Step Function(Arguments))>{
+              'writes': ('x:1', (Arguments a) => WritesAFile(path: '/x', content: 'x')),
+            },
+            predicates: <String, Predicate>{
+              'vault_enabled': const CannotSay('/etc/subject/settings is not on this machine'),
+            },
+          ),
+        ).resolve(
+          programOf('p', <(String, OnFailure, List<String>)>[
+            ('writes', OnFailure.exit, <String>['vault_enabled']),
+          ]),
+        );
+
+    test('THE RECORD IS CLOSED, with an end and an exit code', () async {
+      // Measured on a machine before it was fixed: the record kept no end and no exit code, so
+      // everything reading records afterwards showed a run still going while the process was gone.
+      final Harness h = Harness();
+      final RunRecord record = await h.runner.run(
+        program: programThatCannotAsk(),
+        mode: Mode.test,
+        header: h.header(),
+      );
+
+      expect(record.exitCode, isNot(0));
+      expect(record.end, isNotNull);
+    });
+
+    test('it names what could not be read, so an operator can act on it', () async {
+      final Harness h = Harness();
+      final RunRecord record = await h.runner.run(
+        program: programThatCannotAsk(),
+        mode: Mode.test,
+        header: h.header(),
+      );
+
+      expect(record.issues.single, contains('/etc/subject/settings'));
+    });
+
+    test('nothing ran, and the record says so rather than leaving it to be inferred', () async {
+      final Harness h = Harness();
+      final RunRecord record = await h.runner.run(
+        program: programThatCannotAsk(),
+        mode: Mode.run,
+        header: h.header(),
+      );
+
+      expect(record.steps, isEmpty);
+      expect(h.files.written, isEmpty, reason: 'the refusal lands before the first step');
+    });
+
+    test('THE INNOCENT NEIGHBOUR: a condition that CAN answer still closes normally', () async {
+      // Without this, a runner that treated every condition as unanswerable would pass all three
+      // assertions above and no program with a `when:` would ever run.
+      final Harness h = Harness();
+      final RunRecord record = await h.runner.run(
+        program: programGuardedBy(holds: true, because: 'two interfaces are up'),
+        mode: Mode.run,
+        header: h.header(),
+      );
+
+      expect(record.exitCode, 0);
+      expect(record.issues, isEmpty);
+      expect(h.files.written, isNotEmpty);
+    });
+  });
 }
 
 final class Counting implements Predicate {

@@ -2,6 +2,7 @@ import '../domain/arguments.dart';
 import '../domain/machine.dart';
 import '../domain/recorder.dart';
 import '../domain/resolved_program.dart';
+import '../domain/predicate.dart';
 import '../domain/step_context.dart';
 import '../domain/logger.dart';
 import '../model/failures.dart';
@@ -152,6 +153,32 @@ final class Runner {
         ),
       );
 
+      return closed;
+    } on ConditionUnanswerable catch (refused) {
+      // A condition that could not be answered ends the run BEFORE any step, and the record has to
+      // say so. Without this the record kept no end and no exit code, so everything reading records
+      // afterwards showed a run still going while the process was already gone — measured on a
+      // machine, and the one outcome worse than failing.
+      //
+      // Caught here rather than left to the caller because only this method holds the header the
+      // record is closed from.
+      final RunRecord closed = header.closed(
+        end: machine.clock.now(),
+        exitCode: 1,
+        steps: const <StepRecord>[],
+        issues: <String>[refused.because],
+        leftStanding: const <String>[],
+      );
+      recorder.record(
+        (int sequence, DateTime at) => RunFinished(
+          sequence: sequence,
+          at: at,
+          exitCode: 1,
+          issues: <String>[refused.because],
+          standings: closed.standings,
+          leftStanding: const <String>[],
+        ),
+      );
       return closed;
     } finally {
       // Closed even when a step threw something this engine does not catch. A run that crashed

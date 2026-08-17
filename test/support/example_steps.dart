@@ -149,6 +149,17 @@ final class Says implements Predicate {
       answer ? PredicateResult.holds(because) : PredicateResult.doesNotHold(because);
 }
 
+/// A condition that cannot answer, because what it reads says nothing it can make sense of.
+final class CannotSay implements Predicate {
+  const CannotSay(this.because);
+
+  final String because;
+
+  @override
+  Future<PredicateResult> evaluate(PredicateContext context) async =>
+      throw ConditionUnanswerable(because);
+}
+
 /// A step that only measures the machine and finds it as it should be.
 ///
 /// There is nothing to take it back from, which is exactly what makes it worth having here: a
