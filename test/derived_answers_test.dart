@@ -335,12 +335,12 @@ void main() {
       final DeclaredAnswers half = DeclaredAnswers(<ArgumentSpec>[
         text('fqdn'),
         text('build_plane'),
-        ArgumentSpec(
+        const ArgumentSpec(
           name: 'registry_is_local',
           kind: ArgumentKind.text,
           describes: 'the relation',
           required: false,
-          derivation: const Derivation(rule: DerivationRule.sameAs, from: 'build_plane'),
+          derivation: Derivation(rule: DerivationRule.sameAs, from: 'build_plane'),
         ),
       ]);
 
