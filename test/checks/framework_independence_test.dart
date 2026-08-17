@@ -107,8 +107,11 @@ void main() {
       // an unreadable target does not make it allowed.
       final List<UnhostedEdge> found = _reach(<String, String>{
         '': _manifest('ansiwise_api', <String, String>{
+          // The host is invented. What the walk stops on is that the edge is declared as a
+          // repository at all, so an address anybody could resolve would add nothing and would
+          // name one forge in a framework that knows none.
           'planted_plugin':
-              '\n    git:\n      url: https://github.com/simetrixch/planted-plugins.git',
+              '\n    git:\n      url: https://forge.example.invalid/planted-plugins.git',
         }),
       });
 

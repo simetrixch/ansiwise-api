@@ -4,30 +4,54 @@
 # matched case-insensitively and word-anchored: `snapshotOfState` is a captured state and not an
 # occurrence of `snap`.
 #
+# WORD-ANCHORED CUTS BOTH WAYS, and the blocks below are written knowing it. Anything that is not a
+# letter or a digit ends a word, so a bare name reports every longer one built on it with a
+# separator: `letsencrypt` reports `letsencrypt-prod` and `LETSENCRYPT_EMAIL` alike. A longer name
+# built WITHOUT a separator is a different word and has to stand in its own right — `digita` does
+# not report `digitacloud`, and `simetrix` does not report `simetrixch`.
+#
 # THE LIST LIVES HERE, UNDER tool/, AND NOT BESIDE THE CHECK THAT READS IT. api-purity scans test/
 # to the byte, so a list written into test/checks/api_purity_test.dart would itself be an occurrence
 # of every word on it and the check could never pass. tool/ is the harness: the gate's own programs,
 # none of it compiled into the framework or shipped with it, which is why the check may name what it
 # forbids here. That tool/ stays out of the scan is asserted by a counter-probe of its own.
 #
-# The first six are the components of the platform this framework was cut out of; the rest are the
-# words that platform uses for the things it deploys. Such knowledge does not arrive as a
-# dependency, where a reviewer would meet it in the pubspec — it arrives one word at a time, in a
-# doc comment that explains a port by the tool the author had in mind and in a test fixture that
-# runs a real command because a real command was handy. Both read as illustration on the day they
-# are written and as specification a year later.
-microk8s
-vault
-argocd
-cloudflare
-helm
-snap
+# Such knowledge does not arrive as a dependency, where a reviewer would meet it in the pubspec — it
+# arrives one word at a time, in a doc comment that explains a port by the tool the author had in
+# mind and in a test fixture that names a real thing because a real thing was handy. Both read as
+# illustration on the day they are written and as specification a year later.
+
+# The product this framework was cut out of, the platform it stands on, and the organisation behind
+# both. The same block stands on every plugin's list, word for word: a framework that may name no
+# platform and a plugin that may name no application of its tool are the same scan pointed at two
+# lists, and this is the part of the two lists that has to be identical.
+hostyour
 digita
+digitacloud
+digitaplatform
+simetrix
+simetrixch
+
+# That platform's choices: the distribution it runs on, the components it deploys, the tools it
+# drives those components with, the vendors it rents from, and the authority it gets its
+# certificates from. A plugin leaves its OWN tool off its list, because knowing its tool is the
+# whole point of it. The framework has no tool at all, so it carries every one of them.
+microk8s
+argocd
+tekton
+zot
+authentik
+external-secrets
+vault
+helm
+kubectl
+snap
+netplan
+cloudflare
+hetzner
+letsencrypt
+
+# That platform's own domain words, and its own word for the branch every other branch is cut from.
 tenant
 consumer
-zot
-tekton
-kubectl
-netplan
-hetzner
-authentik
+trunk
