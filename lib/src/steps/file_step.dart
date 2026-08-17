@@ -28,6 +28,17 @@ base mixin FileStep on Step {
   /// only its owner may, and there is no sensible guess between the two.
   int get mode;
 
+  /// Whether the file belongs to root, so every read and write of it is elevated.
+  ///
+  /// **The default is false and that is the safe direction**: a step nobody thought about touches a
+  /// file as the account the run was started by, and fails loudly with a permission error rather
+  /// than quietly gaining a privilege nobody granted it.
+  ///
+  /// A step whose path is decided by its ROW asks the row, because whether a path belongs to root is
+  /// a property of that path. A step whose path is fixed in its own code answers here, because it
+  /// already knows which file it means.
+  bool get elevated => false;
+
   /// What the file should hold, or why this machine needs no such file.
   ///
   /// Computed rather than stored, because it may depend on what the machine says. It is read in
@@ -52,10 +63,10 @@ base mixin FileStep on Step {
         return CheckResult.satisfied(because);
       case TextContent(:final String text):
         final String path = pathFor(context);
-        if (!await context.files.exists(path)) {
+        if (!await context.files.exists(path, elevated: elevated)) {
           return const CheckResult.ready();
         }
-        return await context.files.read(path) == text
+        return await context.files.read(path, elevated: elevated) == text
             ? CheckResult.satisfied('$path already holds what this step writes')
             : const CheckResult.ready();
     }
@@ -68,8 +79,8 @@ base mixin FileStep on Step {
         return StepPlan.nothing(because);
       case TextContent(:final String text):
         final String path = pathFor(context);
-        final String current = await context.files.exists(path)
-            ? await context.files.read(path)
+        final String current = await context.files.exists(path, elevated: elevated)
+            ? await context.files.read(path, elevated: elevated)
             : '';
         return StepPlan.diff(path, before: current, after: text);
     }
@@ -82,7 +93,7 @@ base mixin FileStep on Step {
     // what a plugin author overrides one method of, and an apply that wrote regardless would put a
     // file on a machine whose own check had just said it has no business with one.
     if (await contentFor(context) case TextContent(:final String text)) {
-      await context.files.write(pathFor(context), text, mode: mode);
+      await context.files.write(pathFor(context), text, mode: mode, elevated: elevated);
     }
   }
 
@@ -96,6 +107,8 @@ base mixin FileStep on Step {
   /// It reads and changes nothing, so it is safe in every mode.
   Future<String?> contentBefore(StepContext context) async {
     final String path = pathFor(context);
-    return await context.files.exists(path) ? context.files.read(path) : null;
+    return await context.files.exists(path, elevated: elevated)
+        ? context.files.read(path, elevated: elevated)
+        : null;
   }
 }
