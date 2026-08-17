@@ -49,23 +49,30 @@ final class PlanningFiles implements Files {
   final StepName step;
 
   @override
-  Future<bool> exists(String path) => inner.exists(path);
+  // A READ is a read whether or not it needs root to be performed. Elevation says what may be
+  // reached, never whether anything changes — so a dry run carries it through exactly as it carries
+  // the path.
+  @override
+  Future<bool> exists(String path, {bool elevated = false}) =>
+      inner.exists(path, elevated: elevated);
 
   @override
-  Future<String> read(String path) => inner.read(path);
+  Future<String> read(String path, {bool elevated = false}) => inner.read(path, elevated: elevated);
 
   @override
-  Future<List<String>> list(String path) => inner.list(path);
+  Future<List<String>> list(String path, {bool elevated = false}) =>
+      inner.list(path, elevated: elevated);
 
   @override
-  Future<void> write(String path, String content, {required int mode}) =>
+  Future<void> write(String path, String content, {required int mode, bool elevated = false}) =>
       throw MutationRefused('write $path', step: step);
 
   @override
-  Future<void> delete(String path) => throw MutationRefused('delete $path', step: step);
+  Future<void> delete(String path, {bool elevated = false}) =>
+      throw MutationRefused('delete $path', step: step);
 
   @override
-  Future<void> createDirectory(String path, {required int mode}) =>
+  Future<void> createDirectory(String path, {required int mode, bool elevated = false}) =>
       throw MutationRefused('create directory $path', step: step);
 }
 

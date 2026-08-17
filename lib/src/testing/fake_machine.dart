@@ -99,9 +99,17 @@ final class FakeFiles implements Files {
   /// The permission bits each written path was given.
   final Map<String, int> modes = <String, int>{};
 
+  /// Every path a step reached for AS ROOT, in the order it did.
+  ///
+  /// Kept because whether a step knows it needs root is a property worth asserting: a step reaching
+  /// for a path only root may touch, without saying so, works against a fake and fails on a machine.
+  final List<String> asRoot = <String>[];
+
   @override
-  Future<bool> exists(String path) async =>
-      contents.containsKey(path) || directories.contains(path) || _holdsFiles(path);
+  Future<bool> exists(String path, {bool elevated = false}) async {
+    if (elevated) asRoot.add(path);
+    return contents.containsKey(path) || directories.contains(path) || _holdsFiles(path);
+  }
 
   /// Whether any file sits under [path].
   ///
@@ -112,7 +120,8 @@ final class FakeFiles implements Files {
   bool _holdsFiles(String path) => contents.keys.any((String p) => p.startsWith('$path/'));
 
   @override
-  Future<String> read(String path) async {
+  Future<String> read(String path, {bool elevated = false}) async {
+    if (elevated) asRoot.add(path);
     final String? content = contents[path];
     if (content == null) {
       throw StateError('no such file: $path');
@@ -121,27 +130,35 @@ final class FakeFiles implements Files {
   }
 
   @override
-  Future<List<String>> list(String path) async => <String>[
+  Future<List<String>> list(String path, {bool elevated = false}) async => <String>[
     for (final String p in contents.keys)
       if (p.startsWith('$path/')) p.substring(path.length + 1),
   ];
 
   @override
-  Future<void> write(String path, String content, {required int mode}) async {
+  Future<void> write(
+    String path,
+    String content, {
+    required int mode,
+    bool elevated = false,
+  }) async {
+    if (elevated) asRoot.add(path);
     contents[path] = content;
     modes[path] = mode;
     written.add(path);
   }
 
   @override
-  Future<void> delete(String path) async {
+  Future<void> delete(String path, {bool elevated = false}) async {
+    if (elevated) asRoot.add(path);
     contents.remove(path);
     directories.remove(path);
     deleted.add(path);
   }
 
   @override
-  Future<void> createDirectory(String path, {required int mode}) async {
+  Future<void> createDirectory(String path, {required int mode, bool elevated = false}) async {
+    if (elevated) asRoot.add(path);
     directories.add(path);
     modes[path] = mode;
   }

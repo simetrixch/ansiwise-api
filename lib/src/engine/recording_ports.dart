@@ -137,18 +137,25 @@ final class RecordingFiles implements Files {
   final StepName step;
 
   @override
-  Future<bool> exists(String path) => inner.exists(path);
+  Future<bool> exists(String path, {bool elevated = false}) =>
+      inner.exists(path, elevated: elevated);
 
   @override
-  Future<String> read(String path) => inner.read(path);
+  Future<String> read(String path, {bool elevated = false}) => inner.read(path, elevated: elevated);
 
   @override
-  Future<List<String>> list(String path) => inner.list(path);
+  Future<List<String>> list(String path, {bool elevated = false}) =>
+      inner.list(path, elevated: elevated);
 
   @override
-  Future<void> write(String path, String content, {required int mode}) async {
+  Future<void> write(
+    String path,
+    String content, {
+    required int mode,
+    bool elevated = false,
+  }) async {
     final bool existed = await inner.exists(path);
-    await inner.write(path, content, mode: mode);
+    await inner.write(path, content, mode: mode, elevated: elevated);
     recorder.record(
       (int sequence, DateTime at) => FileWritten(
         sequence: sequence,
@@ -162,9 +169,9 @@ final class RecordingFiles implements Files {
   }
 
   @override
-  Future<void> delete(String path) async {
+  Future<void> delete(String path, {bool elevated = false}) async {
     final bool existed = await inner.exists(path);
-    await inner.delete(path);
+    await inner.delete(path, elevated: elevated);
     if (existed) {
       recorder.record(
         (int sequence, DateTime at) => Log(
@@ -179,9 +186,9 @@ final class RecordingFiles implements Files {
   }
 
   @override
-  Future<void> createDirectory(String path, {required int mode}) async {
+  Future<void> createDirectory(String path, {required int mode, bool elevated = false}) async {
     final bool existed = await inner.exists(path);
-    await inner.createDirectory(path, mode: mode);
+    await inner.createDirectory(path, mode: mode, elevated: elevated);
     if (!existed) {
       recorder.record(
         (int sequence, DateTime at) => Log(
