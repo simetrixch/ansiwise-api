@@ -104,4 +104,67 @@ void main() {
       );
     });
   });
+
+  group('a slot that is carried AND optional', () {
+    // The one case a plain carried slot cannot state: a value written by a LATER act, and therefore
+    // absent the first time the file is made. A pinned version is the shape of it — a fresh
+    // installation has nothing pinned, and a rewrite must hand back whatever was pinned since.
+    const Template template = Template(
+      path: 't.yaml',
+      text: 'name: <name>\nrelease: <release!?>\n',
+    );
+
+    test('THE INNOCENT NEIGHBOUR: it carries the value where the file has one', () {
+      // Without this, a version that always dropped the line would pass every assertion below and
+      // silently throw away the value the whole slot exists to keep.
+      expect(
+        template.filledWith(<String, String>{
+          'name': 'one',
+        }, previousText: 'name: something-else\nrelease: v1.2.3\n'),
+        'name: one\nrelease: v1.2.3\n',
+      );
+    });
+
+    test('its line is DROPPED on the very first write, rather than refusing', () {
+      expect(template.filledWith(<String, String>{'name': 'one'}), 'name: one\n');
+    });
+
+    test('its line is dropped where the earlier content has no line of that shape', () {
+      expect(
+        template.filledWith(<String, String>{
+          'name': 'one',
+        }, previousText: 'name: something-else\n'),
+        'name: one\n',
+      );
+    });
+
+    test('THE GUARD IS NOT LOST: a PLAIN carried slot still refuses on a first write', () {
+      // The widening must not reach the slot beside it. Without this, making one kind droppable
+      // could quietly make both, and every template pointed at the wrong file would write itself
+      // out short and report success.
+      const Template plain = Template(path: 't.yaml', text: 'release: <release!>\n');
+
+      expect(
+        () => plain.filledWith(const <String, String>{}),
+        throwsA(
+          isA<TemplateRefused>().having(
+            (TemplateRefused refused) => refused.message,
+            'message',
+            contains('first time this file is written'),
+          ),
+        ),
+      );
+    });
+
+    test('a run may not hand it a value either, exactly as a carried slot may not', () {
+      expect(
+        () => template.filledWith(<String, String>{'name': 'one', 'release': 'v9'}),
+        throwsA(isA<TemplateRefused>()),
+      );
+    });
+
+    test('it is not required, so a run holding nothing for it is not "unfilled"', () {
+      expect(() => template.filledWith(<String, String>{'name': 'one'}), returnsNormally);
+    });
+  });
 }

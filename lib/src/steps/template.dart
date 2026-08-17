@@ -46,7 +46,7 @@ final class Template {
     final List<Slot> named = slots;
 
     final List<Slot> requiredSlots = named.where((Slot s) => s.kind == SlotKind.required).toList();
-    final List<Slot> carriedSlots = named.where((Slot s) => s.kind == SlotKind.carried).toList();
+    final List<Slot> carriedSlots = named.where((Slot s) => s.isCarried).toList();
 
     final List<String> carriedSupplied = <String>[
       for (final Slot s in carriedSlots)
@@ -108,7 +108,7 @@ final class Template {
       if (dropLine) continue;
 
       // Replace required and optional slots first
-      for (final Slot s in slotsOnLine.where((Slot s) => s.kind != SlotKind.carried)) {
+      for (final Slot s in slotsOnLine.where((Slot s) => !s.isCarried)) {
         if (values.containsKey(s.name)) {
           line = line.replaceAll(s.text, values[s.name]!);
         }
@@ -116,9 +116,7 @@ final class Template {
 
       // A carried slot takes its value from the file as it stands, so the line it sits on is turned
       // into an expression over the previous content and the value is whatever stood there.
-      final List<Slot> carriedOnLine = slotsOnLine
-          .where((Slot s) => s.kind == SlotKind.carried)
-          .toList();
+      final List<Slot> carriedOnLine = slotsOnLine.where((Slot s) => s.isCarried).toList();
       if (carriedOnLine.length > 1) {
         // Two of them on one line cannot both be right. The expression built below puts `(.*)` in
         // place of each, and `(.*)` is greedy: the first would take everything up to the last
@@ -145,6 +143,12 @@ final class Template {
           }
         }
 
+        if (match == null && carriedOnLine.single.kind == SlotKind.carriedOptional) {
+          // The one slot that says the line belongs only where a value was carried. Dropping it
+          // here is what the template ASKED FOR, spelled at the place the value appears — which is
+          // what tells this apart from the silent third answer refused below.
+          continue;
+        }
         if (match == null) {
           // NOT dropped. A carried slot says "keep what is already there", and where there is
           // nothing already there the honest answers are two: find the value, or say it cannot be

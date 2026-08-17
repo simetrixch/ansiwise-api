@@ -26,6 +26,19 @@ enum SlotKind {
 
   /// A slot that takes a value from a previous state, never from the program.
   carried,
+
+  /// A slot that takes a value from a previous state, and whose line is dropped where there is none.
+  ///
+  /// The one case a plain carried slot cannot state: a value that is written by a later act and is
+  /// therefore ABSENT the first time the file is made. A pinned version is the shape of it — a fresh
+  /// installation has nothing pinned, and a rewrite must hand back whatever was pinned since.
+  ///
+  /// It is spelled out in the template rather than being what a carried slot does on its own,
+  /// because dropping a line reads as success: the file is written, the step reports done, and a
+  /// line the template says belongs in it is simply not there. Written by the author, at the one
+  /// place the value appears, it is a statement that the line belongs only where a value was
+  /// carried. Inferred, it would hide every template pointed at the wrong file.
+  carriedOptional,
 }
 
 /// A parsed slot with its name and kind.
@@ -48,12 +61,17 @@ class Slot {
   int get hashCode => name.hashCode ^ kind.hashCode;
 
   /// The raw text representation of this slot, e.g. `<name?>`.
-  String get text =>
-      '<$name${kind == SlotKind.optional
-          ? '?'
-          : kind == SlotKind.carried
-          ? '!'
-          : ''}>';
+  String get text => '<$name${_marks[kind]!}>';
+
+  static const Map<SlotKind, String> _marks = <SlotKind, String>{
+    SlotKind.required: '',
+    SlotKind.optional: '?',
+    SlotKind.carried: '!',
+    SlotKind.carriedOptional: '!?',
+  };
+
+  /// Whether this slot takes its value from what stands in the file already.
+  bool get isCarried => kind == SlotKind.carried || kind == SlotKind.carriedOptional;
 }
 
 /// A slot: a lower-case name in angle brackets, possibly suffixed with ? or !, and nothing that
@@ -63,7 +81,9 @@ class Slot {
 /// by whoever writes a program row, so it reads as one word in one casing: `<upstream-servers>` and
 /// never `<upstream_servers>`. Admitting both would make two spellings of one name, and a row that
 /// picked the other one would go unfilled while looking correct.
-final RegExp slotPattern = RegExp(r'<([a-z][a-z0-9-]*)([?!]?)>');
+/// **The mark is read longest-first**, so `!?` is one mark and not a carried slot followed by
+/// something the grammar would then not accept.
+final RegExp slotPattern = RegExp(r'<([a-z][a-z0-9-]*)(!\?|[?!]?)>');
 
 /// The slots [text] carries, each named once, in the order they first appear.
 List<Slot> slotsIn(String text) {
@@ -72,11 +92,12 @@ List<Slot> slotsIn(String text) {
   for (final RegExpMatch match in slotPattern.allMatches(text)) {
     final String name = match.group(1)!;
     final String suffix = match.group(2)!;
-    final SlotKind kind = suffix == '?'
-        ? SlotKind.optional
-        : suffix == '!'
-        ? SlotKind.carried
-        : SlotKind.required;
+    final SlotKind kind = switch (suffix) {
+      '?' => SlotKind.optional,
+      '!' => SlotKind.carried,
+      '!?' => SlotKind.carriedOptional,
+      _ => SlotKind.required,
+    };
 
     // For slots with the same name but different suffixes (unlikely but possible), we just add them
     final String key = '$name$suffix';

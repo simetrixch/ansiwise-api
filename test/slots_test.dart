@@ -50,4 +50,30 @@ void main() {
       expect(leftoverSlotIn('nothing here'), isNull);
     });
   });
+
+  group('the mark that is two characters', () {
+    test('<name!?> is read as one slot, carried and optional', () {
+      expect(slotsIn('a <release!?> b'), <Slot>[const Slot('release', SlotKind.carriedOptional)]);
+    });
+
+    test('it writes itself back exactly as it was read, or a replace would miss it', () {
+      // The text is used to find and replace the slot in a line. A round trip that lost a character
+      // would leave the literal slot in the file, which is the failure the whole notation avoids.
+      expect(const Slot('release', SlotKind.carriedOptional).text, '<release!?>');
+      expect(slotsIn('<release!?>').single.text, '<release!?>');
+    });
+
+    test('THE INNOCENT NEIGHBOURS: the three older marks still read as they did', () {
+      expect(slotsIn('<a>').single.kind, SlotKind.required);
+      expect(slotsIn('<a?>').single.kind, SlotKind.optional);
+      expect(slotsIn('<a!>').single.kind, SlotKind.carried);
+    });
+
+    test('the marks in the other order are not a slot at all', () {
+      // `?!` is not the notation. It matches nothing, so what it leaves behind is caught by the
+      // broader scan for anything in angle brackets rather than being read as something it is not.
+      expect(slotsIn('<a?!>'), isEmpty);
+      expect(leftoverSlotIn('<a?!>'), '<a?!>');
+    });
+  });
 }
