@@ -236,3 +236,28 @@ final class Arguments {
     );
   }
 }
+
+/// The argument a step declares when the file it is pointed at may belong to root.
+///
+/// **Written once because it is the same question everywhere.** Whether a path belongs to root is a
+/// property of that PATH, and a step is pointed at one by its row — so the row answers, and a step
+/// that decided for every caller would be a package knowing something about the product that used
+/// it. Twenty-eight steps ask it, and twenty-eight copies of the same paragraph would disagree with
+/// each other within a month.
+///
+/// **Reading and writing as root does not make either act anything else.** A read stays a read, so a
+/// dry run performs it; a write stays a write, so a dry run refuses it. Elevation says what may be
+/// REACHED, never whether anything changes.
+///
+/// A step declares it by putting this in its own argument list, carries it as a field, and passes it
+/// to every call it makes on the file port. Passing it to some and not others is the failure that
+/// cost twelve machine runs to find five occurrences of: the call the row is obviously about carried
+/// it, and the backup written beside it did not.
+const ArgumentSpec elevationArgument = ArgumentSpec(
+  name: 'elevated',
+  kind: ArgumentKind.flag,
+  required: false,
+  describes:
+      'whether the file this row points at belongs to root, so that reading and writing it need '
+      'elevation. Leave it off for a path the account running the program owns',
+);
