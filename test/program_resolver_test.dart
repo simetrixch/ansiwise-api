@@ -213,6 +213,84 @@ void main() {
     );
   });
 
+  test('a row binding a slot to an answer the program does not declare is refused, naming both', () {
+    // THE PLANTED DEFECT. `values:` names an answer once per entry, and until the resolver walked a
+    // mapping it looked only at arguments whose WHOLE value is an answer name. So this resolved, and
+    // what an operator met was a refusal while the template was being filled — naming the slot,
+    // which is the half they did not get wrong, on a run that had already begun.
+    expect(
+      () => const ProgramResolver(_bindsSlotsToAnswers).resolve(
+        programOf(
+          'p',
+          <(String, OnFailure, List<String>)>[('fills_a_template', OnFailure.exit, <String>[])],
+          arguments: <String, Arguments>{
+            'fills_a_template': const Arguments(<String, Object>{
+              'values': <String, Object?>{
+                'build-plane': <String, Object?>{'answer': 'build_plane'},
+              },
+            }),
+          },
+        ),
+      ),
+      throwsA(
+        isA<ProgramInvalid>().having(
+          (ProgramInvalid p) => p.message,
+          'message',
+          allOf(contains('"build-plane"'), contains('"build_plane"'), contains('does not declare')),
+        ),
+      ),
+      reason: 'both halves are named, because either of them can be the mistake',
+    );
+  });
+
+  test('THE INNOCENT NEIGHBOUR: a binding to an answer the program declares resolves', () {
+    // Without this the refusal above would mean nothing: a resolver that refused every mapping would
+    // pass that test and make the mechanism unusable.
+    final ResolvedProgram resolved = const ProgramResolver(_bindsSlotsToAnswers).resolve(
+      programOf(
+        'p',
+        <(String, OnFailure, List<String>)>[('fills_a_template', OnFailure.exit, <String>[])],
+        answers: const DeclaredAnswers(<ArgumentSpec>[
+          ArgumentSpec(
+            name: 'build_plane',
+            kind: ArgumentKind.text,
+            describes: 'which machine builds',
+          ),
+        ]),
+        arguments: <String, Arguments>{
+          'fills_a_template': const Arguments(<String, Object>{
+            'values': <String, Object?>{
+              'build-plane': <String, Object?>{'answer': 'build_plane'},
+            },
+          }),
+        },
+      ),
+    );
+
+    expect(resolved.steps, hasLength(1));
+  });
+
+  test('an entry that names no answer at all is passed over, not guessed at', () {
+    // A mapping carries data a step reads itself as well as bindings. An entry saying nothing about
+    // an answer says nothing this check is about.
+    final ResolvedProgram resolved = const ProgramResolver(_bindsSlotsToAnswers).resolve(
+      programOf(
+        'p',
+        <(String, OnFailure, List<String>)>[('fills_a_template', OnFailure.exit, <String>[])],
+        arguments: <String, Arguments>{
+          'fills_a_template': const Arguments(<String, Object>{
+            'values': <String, Object?>{
+              'literal': 'a value written here',
+              'nested': <String, Object?>{'join': ','},
+            },
+          }),
+        },
+      ),
+    );
+
+    expect(resolved.steps, hasLength(1));
+  });
+
   test('a step reading an answer the program declares resolves', () {
     final ResolvedProgram resolved = const ProgramResolver(_readsTheDomain).resolve(
       programOf(
@@ -255,6 +333,26 @@ const Registry _readsAnswerName = Registry(
           name: 'source',
           kind: ArgumentKind.answerName,
           describes: 'the answer to read',
+        ),
+      ],
+    ),
+  },
+  predicates: <PredicateName, RegisteredPredicate>{},
+);
+
+/// A step taking a mapping, which is the shape a row uses to bind a slot to an answer.
+const Registry _bindsSlotsToAnswers = Registry(
+  steps: <StepName, RegisteredStep>{
+    StepName('fills_a_template'): RegisteredStep(
+      name: StepName('fills_a_template'),
+      source: 'lib/src/steps/fills_a_template.dart:1',
+      create: _aStep,
+      arguments: <ArgumentSpec>[
+        ArgumentSpec(
+          name: 'values',
+          kind: ArgumentKind.mapping,
+          required: false,
+          describes: 'which answer fills each slot of the template',
         ),
       ],
     ),

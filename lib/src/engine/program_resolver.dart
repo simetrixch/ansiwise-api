@@ -78,6 +78,29 @@ final class ProgramResolver {
             );
           }
         }
+        // A MAPPING NAMES ANSWERS TOO, one per entry, and they were the ones nobody checked.
+        //
+        // `values: {build-plane: {answer: build_plane}}` binds a slot to an answer, and until this
+        // walk existed the resolver looked only at arguments whose whole value IS an answer name. So
+        // a row binding a slot to an answer nobody declared resolved, and what an operator met was a
+        // refusal at the moment the template was filled — naming the SLOT, which is the half they
+        // did not get wrong, on a run that had already begun.
+        //
+        // Both halves are named here because either can be the mistake: the slot may be misspelt
+        // against the template, or the answer against the program, and a message carrying one of
+        // them sends half the readers to the wrong file.
+        if (spec.kind == ArgumentKind.mapping && filled.arguments.has(spec.name)) {
+          for (final MapEntry<String, String> bound in _answersBoundIn(
+            filled.arguments.raw(spec.name),
+          ).entries) {
+            if (program.answers.named(bound.value) == null) {
+              problems.add(
+                '$where: "${spec.name}" fills "${bound.key}" from the answer "${bound.value}", and '
+                'this program does not declare it',
+              );
+            }
+          }
+        }
       }
       problems.addAll(
         argumentProblems(
@@ -422,4 +445,24 @@ final class _Publisher {
 
   /// How a refusal names it, counting from one because a person reading a file counts that way.
   String get said => 'step ${position + 1} $step';
+}
+
+/// Which answer each entry of a mapping argument is filled from, by the name the entry stands under.
+///
+/// The one shape a mapping entry may take to name an answer is `{answer: <name>}`, optionally with a
+/// `join` beside it where the answer holds several values. Every other entry is data the step reads
+/// itself and says nothing about answers, so it is passed over rather than guessed at.
+///
+/// Read out of the RAW argument because that is what a mapping is at this point: the loader has
+/// checked its shape — names on the left, one level of scalars under them — and nothing has turned
+/// it into a step's own type yet, which is the whole reason a check can stand here at all.
+Map<String, String> _answersBoundIn(Object? mapping) {
+  if (mapping is! Map<String, Object?>) {
+    return const <String, String>{};
+  }
+  return <String, String>{
+    for (final MapEntry<String, Object?> each in mapping.entries)
+      if (each.value case final Map<String, Object?> body)
+        if (body['answer'] case final String answer) each.key: answer,
+  };
 }
