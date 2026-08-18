@@ -93,8 +93,29 @@ base mixin FileStep on Step {
     // what a plugin author overrides one method of, and an apply that wrote regardless would put a
     // file on a machine whose own check had just said it has no business with one.
     if (await contentFor(context) case TextContent(:final String text)) {
-      await context.files.write(pathFor(context), text, mode: mode, elevated: elevated);
+      final String path = pathFor(context);
+      // THE DIRECTORY IS MADE FIRST, and here rather than in each step that writes. A path a row
+      // names may be one nothing has created yet — a directory the product invented, or one on a
+      // filesystem the machine empties — and a write into it fails with a message about a path that
+      // says nothing about whose job the path was. Three steps had already grown their own copy of
+      // this before it was written once.
+      //
+      // The mode follows the file's. A directory around a file nobody but its owner may read must
+      // not be listable either, or the names in it say which secret lives where; a directory around
+      // a file everybody may read is traversable by everybody.
+      await context.files.createDirectory(
+        _directoryOf(path),
+        mode: mode & 0x24 == 0 ? 0x1c0 : 0x1ed,
+        elevated: elevated,
+      );
+      await context.files.write(path, text, mode: mode, elevated: elevated);
     }
+  }
+
+  /// The directory [path] stands in, or the root where it stands in none.
+  static String _directoryOf(String path) {
+    final int cut = path.lastIndexOf('/');
+    return cut <= 0 ? '/' : path.substring(0, cut);
   }
 
   /// What the file held before this step wrote it, or null when it was not there.
