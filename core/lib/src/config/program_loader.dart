@@ -263,36 +263,22 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
         refusals.add(line, '"$name" has "stated_when", so it cannot be "required: true"');
         continue;
       }
+      // ONE REGISTERED NAME AND NOTHING ELSE. It used to be a comparison written here — an answer,
+      // and either a literal or a second answer to match it against — which is a condition living in
+      // a program file beside the registered ones. A file that can compare two values can compare
+      // anything, and then what an operator debugs is the file rather than the code.
       if (statedWhenNode is! YamlMap ||
-          !statedWhenNode.containsKey('answer') ||
-          (statedWhenNode.containsKey('equals') == statedWhenNode.containsKey('equals_answer'))) {
+          statedWhenNode.length != 1 ||
+          statedWhenNode['predicate'] is! String) {
         refusals.add(
           line,
-          '"$name": "stated_when" is a map with "answer" and exactly one of "equals" or "equals_answer"',
+          '"$name": "stated_when" names one registered condition, as {predicate: <name>} — the '
+          'condition itself is bound in the installation\'s configuration, where a name is given to '
+          'what it looks at',
         );
         continue;
       }
-      final Object? swAnswer = statedWhenNode['answer'];
-      final Object? swEquals = statedWhenNode['equals'];
-      final Object? swEqualsAnswer = statedWhenNode['equals_answer'];
-
-      if (swAnswer is! String) {
-        refusals.add(line, '"$name": "stated_when.answer" must be text');
-        continue;
-      }
-      if (swEquals != null && swEquals is! String) {
-        refusals.add(line, '"$name": "stated_when.equals" must be text');
-        continue;
-      }
-      if (swEqualsAnswer != null && swEqualsAnswer is! String) {
-        refusals.add(line, '"$name": "stated_when.equals_answer" must be text');
-        continue;
-      }
-      statedWhen = StatedWhen(
-        answer: swAnswer,
-        equals: swEquals as String?,
-        equalsAnswer: swEqualsAnswer as String?,
-      );
+      statedWhen = StatedWhen(predicate: statedWhenNode['predicate']! as String);
     }
 
     // `default_from:` names the answer this one falls back to where nobody supplied it. The
@@ -440,24 +426,10 @@ DeclaredAnswers _answers(YamlMap document, _Refusals refusals) {
     );
   }
 
-  // Cross-reference check: stated_when references must exist
-  for (final ArgumentSpec spec in specs) {
-    final StatedWhen? trigger = spec.statedWhen;
-    if (trigger != null) {
-      if (!seen.contains(trigger.answer)) {
-        refusals.add(
-          document.span.start.line,
-          'the answer "${trigger.answer}" named in "${spec.name}" stated_when does not exist',
-        );
-      }
-      if (trigger.equalsAnswer != null && !seen.contains(trigger.equalsAnswer)) {
-        refusals.add(
-          document.span.start.line,
-          'the answer "${trigger.equalsAnswer}" named in "${spec.name}" stated_when does not exist',
-        );
-      }
-    }
-  }
+  // WHETHER THE CONDITION EXISTS is not asked here, and that is deliberate: a condition is bound in
+  // the INSTALLATION's configuration, which this loader has never read. The resolver asks it, once
+  // the registry and the bound names are both in hand, and refuses there naming the program and the
+  // answer — the same place it refuses a step or a predicate a row names and nothing registers.
 
   for (final ArgumentSpec spec in specs) {
     final String? fallsBackTo = spec.defaultFrom;

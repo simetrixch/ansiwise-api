@@ -31,24 +31,21 @@ enum ArgumentKind {
 
 /// The condition that determines whether an answer must be provided.
 ///
-/// An answer with a condition is requested only when the [answer] holds the expected value.
-/// If the condition does not hold, the answer must not be provided, and if given, it is refused.
+/// An answer with a condition is requested only where the condition holds. Where it does not, the
+/// answer must not be given, and one given anyway is refused — both before the first step runs,
+/// which is the whole value of stating it here rather than letting a row fail later.
+///
+/// **The condition is a REGISTERED NAME, and never a comparison written in the file.** A program file
+/// that can compare two values can compare anything, and then what gets debugged is the file. The
+/// comparison lives in a class with its own probes, is bound to this installation's own facts in its
+/// configuration, and the program row writes one bare word — the same rule `when:` has always had.
 @immutable
 final class StatedWhen {
-  /// Declares a trigger condition for an answer.
-  ///
-  /// Exactly one of [equals] or [equalsAnswer] must be non-null.
-  const StatedWhen({required this.answer, this.equals, this.equalsAnswer})
-    : assert((equals == null) != (equalsAnswer == null));
+  /// Declares that an answer is asked for only where the condition called [predicate] holds.
+  const StatedWhen({required this.predicate});
 
-  /// The name of the other answer this one depends on.
-  final String answer;
-
-  /// The exact text value the other answer must hold.
-  final String? equals;
-
-  /// The name of a third answer whose value the other answer must match.
-  final String? equalsAnswer;
+  /// The registered condition that decides whether this answer is asked for.
+  final String predicate;
 }
 
 /// One argument a step accepts, declared by the step and checked before anything runs.

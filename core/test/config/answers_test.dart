@@ -396,7 +396,7 @@ void main() {
         name: 'db_host',
         kind: ArgumentKind.text,
         describes: 'the database host',
-        statedWhen: StatedWhen(answer: 'use_db', equals: 'true'),
+        statedWhen: StatedWhen(predicate: 'a_database_is_wanted'),
       ),
     ]);
 
@@ -435,13 +435,18 @@ void main() {
     });
 
     test('validates stated_when trigger', () {
+      // WHICH CONDITIONS HOLD IS THE CALLER'S TO MEASURE. They are about one installation, and only
+      // whoever has the machine can ask them — so validation is TOLD, and a probe says so directly
+      // instead of arranging an answer for a comparison to read.
+      const Set<String> wanted = <String>{'a_database_is_wanted'};
+
       // Condition met, but not provided
       expect(
-        () => shaped.validate(<String, Object?>{
-          'color': 'red',
-          'email': 'a@b.com',
-          'use_db': true,
-        }, program: 'deploy-thing'),
+        () => shaped.validate(
+          <String, Object?>{'color': 'red', 'email': 'a@b.com', 'use_db': true},
+          program: 'deploy-thing',
+          conditionsThatHold: wanted,
+        ),
         throwsA(
           isA<AnswersRejected>().having(
             (AnswersRejected r) => r.message,
@@ -471,12 +476,16 @@ void main() {
       // Correctly provided
       expect(
         shaped
-            .validate(<String, Object?>{
-              'color': 'red',
-              'email': 'a@b.com',
-              'use_db': true,
-              'db_host': 'localhost',
-            }, program: 'deploy-thing')
+            .validate(
+              <String, Object?>{
+                'color': 'red',
+                'email': 'a@b.com',
+                'use_db': true,
+                'db_host': 'localhost',
+              },
+              program: 'deploy-thing',
+              conditionsThatHold: wanted,
+            )
             .text('db_host'),
         'localhost',
       );

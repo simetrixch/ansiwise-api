@@ -48,7 +48,14 @@ final class DeclaredAnswers {
   /// wrong kind, one nobody declared. This runs before the gate and before the first step, because
   /// an installation stopped halfway for a value somebody could have typed at the start is the
   /// worst of both.
-  Arguments validate(Map<String, Object?> given, {required String program}) {
+  /// [conditionsThatHold] is which registered conditions this installation answers true for, as the
+  /// caller measured them. An answer stated only under a condition is required exactly where its
+  /// condition is in that set — the caller has the machine to ask on, and this does not.
+  Arguments validate(
+    Map<String, Object?> given, {
+    required String program,
+    Set<String> conditionsThatHold = const <String>{},
+  }) {
     final Map<String, Object> present = <String, Object>{
       for (final MapEntry<String, Object?> e in given.entries)
         if (e.value != null) e.key: e.value!,
@@ -77,6 +84,7 @@ final class DeclaredAnswers {
       // an answer with a fallback cannot be MISSING is said where missing is decided.
       declared: specs,
       noun: 'answer',
+      conditionsThatHold: conditionsThatHold,
     );
     if (problems.isNotEmpty) {
       throw AnswersRejected(problems.join('\n'));

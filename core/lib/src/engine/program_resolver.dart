@@ -153,6 +153,22 @@ final class ProgramResolver {
       );
     }
 
+    // A CONDITION AN ANSWER IS STATED UNDER HAS TO BE REGISTERED, and this is the first place that
+    // can be asked: the loader reads a program file and has never seen the installation's
+    // configuration, which is where a condition is given its name. Unchecked, a misspelt name would
+    // make the answer look unconditional — never asked for, never refused — and an installation
+    // would run without a value nobody noticed was missing.
+    for (final ArgumentSpec spec in program.answers.specs) {
+      if (spec.statedWhen case final StatedWhen stated) {
+        if (registry.predicate(PredicateName(stated.predicate)) == null) {
+          problems.add(
+            '${program.name}: the answer "${spec.name}" is stated only under "${stated.predicate}", '
+            'and no condition is registered under that name',
+          );
+        }
+      }
+    }
+
     for (final String name in program.defaults.names) {
       if (!defaultsDeclared.contains(name)) {
         problems.add(

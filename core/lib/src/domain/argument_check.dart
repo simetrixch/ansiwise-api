@@ -21,6 +21,7 @@ List<String> argumentProblems({
   required List<ArgumentSpec> declared,
   required String noun,
   Set<String> filledElsewhere = const <String>{},
+  Set<String> conditionsThatHold = const <String>{},
 }) {
   final List<String> problems = <String>[];
   final Set<String> known = declared.map((ArgumentSpec s) => s.name).toSet();
@@ -42,16 +43,12 @@ List<String> argumentProblems({
   for (final ArgumentSpec spec in declared) {
     final Object? value = given.raw(spec.name);
 
+    // WHETHER THIS ANSWER WAS ASKED FOR AT ALL, decided by a registered condition rather than by a
+    // comparison written into the program file. [conditionsThatHold] is what the caller measured
+    // before validating: the conditions are about this installation, and only the caller has the
+    // machine to ask them on.
     final StatedWhen? trigger = spec.statedWhen;
-    bool shouldBeAsked = true;
-    if (trigger != null) {
-      final Object? triggerValue = given.raw(trigger.answer);
-      if (trigger.equals != null) {
-        shouldBeAsked = triggerValue.toString() == trigger.equals;
-      } else {
-        shouldBeAsked = triggerValue == given.raw(trigger.equalsAnswer!);
-      }
-    }
+    final bool shouldBeAsked = trigger == null || conditionsThatHold.contains(trigger.predicate);
 
     if (value != null && !shouldBeAsked) {
       problems.add('$where: "${spec.name}" is given but its trigger does not hold');
