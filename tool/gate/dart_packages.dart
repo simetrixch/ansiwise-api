@@ -24,8 +24,9 @@ final class DartPackage {
   /// What its manifest declares, which is what an import says after `package:`.
   ///
   /// Read from the manifest rather than derived from the directory, because the two differ by
-  /// design: the directory is `ansiwise-api` and the package is `ansiwise_api`, since a Dart
-  /// package name may not carry a hyphen.
+  /// design: a directory written with a hyphen holds a package written with an underscore, since a
+  /// Dart package name may not carry a hyphen. Named generically on purpose — this file is one text
+  /// in every repository that has a gate, so an example naming one of them is wrong in the others.
   final String name;
 
   @override

@@ -43,6 +43,8 @@ gate-tree: test/checks/gate_tree_test.dart
 layering: test/checks/layering_test.dart
 # The abolished words appear in no name.
 naming: test/checks/naming_test.dart
+# The gate files that judge nothing are one text in every repository that has a gate.
+shared-gate: test/checks/shared_gate_test.dart
 # The sequence a package gate runs, and what it does when a step of it fails.
 package-gate: test/checks/package_gate_test.dart
 # The version guard, driven with scripted versions.
