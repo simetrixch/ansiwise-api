@@ -19,11 +19,29 @@ void main() {
 
     test('optional and carried slots', () {
       expect(slotsIn('<stage?>'), <Slot>[const Slot('stage', SlotKind.optional)]);
-      expect(slotsIn('<stage!>'), <Slot>[const Slot('stage', SlotKind.carried)]);
-      expect(slotsIn('<a> <a?> <a!>'), <Slot>[
+      expect(slotsIn('<stage!?>'), <Slot>[const Slot('stage', SlotKind.carriedOptional)]);
+      expect(slotsIn('<a> <a?> <a!?>'), <Slot>[
         const Slot('a', SlotKind.required),
         const Slot('a', SlotKind.optional),
-        const Slot('a', SlotKind.carried),
+        const Slot('a', SlotKind.carriedOptional),
+      ]);
+    });
+  });
+
+  group('the mark that is not one', () {
+    test('`!` on its own names no slot, and the leftover scan is what catches it', () {
+      // Carrying is offered only together with dropping, so `!?` is the mark and `!` is not. A
+      // template that writes `<release!>` has named nothing, which puts it exactly where `<Stage>`
+      // already stands: outside the grammar, and reported by the broader scan.
+      expect(slotsIn('release: <release!>'), isEmpty);
+      expect(leftoverSlotIn('release: <release!>'), '<release!>');
+    });
+
+    test('THE INNOCENT NEIGHBOUR: the mark that IS two characters still reads', () {
+      // Without this, a grammar that had stopped reading `!` at all — in `!?` as well — would pass
+      // the assertion above while taking the one carried mark there is with it.
+      expect(slotsIn('release: <release!?>'), <Slot>[
+        const Slot('release', SlotKind.carriedOptional),
       ]);
     });
   });
@@ -63,10 +81,9 @@ void main() {
       expect(slotsIn('<release!?>').single.text, '<release!?>');
     });
 
-    test('THE INNOCENT NEIGHBOURS: the three older marks still read as they did', () {
+    test('THE INNOCENT NEIGHBOURS: the two shorter marks still read as they did', () {
       expect(slotsIn('<a>').single.kind, SlotKind.required);
       expect(slotsIn('<a?>').single.kind, SlotKind.optional);
-      expect(slotsIn('<a!>').single.kind, SlotKind.carried);
     });
 
     test('the marks in the other order are not a slot at all', () {

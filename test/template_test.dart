@@ -27,60 +27,28 @@ void main() {
       );
     });
 
-    test('a carried slot with no earlier line to carry from refuses, and names the line', () {
-      // It used to drop the line, and that is the failure this asserts against: the file comes out
-      // written, the step reports done, and a line the template says belongs in it is simply not
-      // in it. Nothing anywhere says so.
-      const Template template = Template(path: 't.yaml', text: 'line 1\ncarry <foo!> here\nline 3');
-      expect(
-        () =>
-            template.filledWith(<String, String>{}, previousText: 'line 1\nno match here\nline 3'),
-        throwsA(
-          isA<TemplateRefused>().having(
-            (TemplateRefused refused) => refused.toString(),
-            'reason',
-            allOf(contains('t.yaml'), contains('line 2'), contains('<foo!>')),
-          ),
-        ),
-      );
-    });
-
-    test('the first write of a file refuses rather than carrying nothing over', () {
-      // The state every first run is in: there is no earlier content at all. Dropping every carried
-      // line here would write a file missing all of them and report success, and the second run
-      // would read that file back and report there was nothing left to do.
-      const Template template = Template(path: 't.yaml', text: 'line 1\ncarry <foo!> here\nline 3');
-      expect(
-        () => template.filledWith(<String, String>{}),
-        throwsA(
-          isA<TemplateRefused>().having(
-            (TemplateRefused refused) => refused.toString(),
-            'reason',
-            contains('first time this file is written'),
-          ),
-        ),
-      );
-    });
-
     test('two carried slots on one line are refused rather than resolved at random', () {
       // Each becomes `(.*)` in the expression built from the line, and `(.*)` is greedy: the first
       // would take everything up to the last fixed piece and the second whatever is left. That is
       // an answer nobody can predict from reading the template.
-      const Template template = Template(path: 't.yaml', text: 'a <foo!> b <bar!> c');
+      const Template template = Template(path: 't.yaml', text: 'a <foo!?> b <bar!?> c');
       expect(
         () => template.filledWith(<String, String>{}, previousText: 'a one b two c'),
         throwsA(
           isA<TemplateRefused>().having(
             (TemplateRefused refused) => refused.toString(),
             'reason',
-            allOf(contains('at most one'), contains('<foo!>'), contains('<bar!>')),
+            allOf(contains('at most one'), contains('<foo!?>'), contains('<bar!?>')),
           ),
         ),
       );
     });
 
     test('keeps line for carried slot and replaces with previous value', () {
-      const Template template = Template(path: 't.yaml', text: 'line 1\ncarry <foo!> here\nline 3');
+      const Template template = Template(
+        path: 't.yaml',
+        text: 'line 1\ncarry <foo!?> here\nline 3',
+      );
       expect(
         template.filledWith(
           <String, String>{},
@@ -91,7 +59,7 @@ void main() {
     });
 
     test('carried slot refuses provided value from run', () {
-      const Template template = Template(path: 't.yaml', text: 'carry <foo!>');
+      const Template template = Template(path: 't.yaml', text: 'carry <foo!?>');
       expect(
         () => template.filledWith(<String, String>{'foo': 'val'}),
         throwsA(
@@ -106,9 +74,9 @@ void main() {
   });
 
   group('a slot that is carried AND optional', () {
-    // The one case a plain carried slot cannot state: a value written by a LATER act, and therefore
-    // absent the first time the file is made. A pinned version is the shape of it — a fresh
-    // installation has nothing pinned, and a rewrite must hand back whatever was pinned since.
+    // The one carried mark there is, and what it is for: a value written by a LATER act, and
+    // therefore absent the first time the file is made. A pinned version is the shape of it — a
+    // fresh installation has nothing pinned, and a rewrite must hand back whatever was pinned since.
     const Template template = Template(
       path: 't.yaml',
       text: 'name: <name>\nrelease: <release!?>\n',
@@ -138,19 +106,21 @@ void main() {
       );
     });
 
-    test('THE GUARD IS NOT LOST: a PLAIN carried slot still refuses on a first write', () {
-      // The widening must not reach the slot beside it. Without this, making one kind droppable
-      // could quietly make both, and every template pointed at the wrong file would write itself
-      // out short and report success.
-      const Template plain = Template(path: 't.yaml', text: 'release: <release!>\n');
+    test('`<name!>` is no slot of this template, and a run handing it a value is refused', () {
+      // Carrying is offered only together with dropping, so a lone `!` is not the notation and a
+      // template writing it has named nothing. What that costs is stated here rather than met on a
+      // machine: the text goes to the leftover scan, and a program still supplying the value is
+      // told the template has nowhere to put it.
+      const Template lone = Template(path: 't.yaml', text: 'release: <release!>\n');
 
+      expect(lone.slots, isEmpty);
       expect(
-        () => plain.filledWith(const <String, String>{}),
+        () => lone.filledWith(const <String, String>{'release': 'v9'}),
         throwsA(
           isA<TemplateRefused>().having(
             (TemplateRefused refused) => refused.message,
             'message',
-            contains('first time this file is written'),
+            contains('the template names no such slot'),
           ),
         ),
       );

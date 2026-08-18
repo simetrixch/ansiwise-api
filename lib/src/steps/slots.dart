@@ -24,20 +24,21 @@ enum SlotKind {
   /// A slot that may hold a value, and whose line is dropped if not.
   optional,
 
-  /// A slot that takes a value from a previous state, never from the program.
-  carried,
-
   /// A slot that takes a value from a previous state, and whose line is dropped where there is none.
   ///
-  /// The one case a plain carried slot cannot state: a value that is written by a later act and is
-  /// therefore ABSENT the first time the file is made. A pinned version is the shape of it — a fresh
-  /// installation has nothing pinned, and a rewrite must hand back whatever was pinned since.
+  /// What it is for: a value that is written by a later act and is therefore ABSENT the first time
+  /// the file is made. A pinned version is the shape of it — a fresh installation has nothing
+  /// pinned, and a rewrite must hand back whatever was pinned since. Nothing else can state it,
+  /// because the value is not the run's to supply: a step argument cannot name what the program does
+  /// not hold, and a second template would be the same file twice.
   ///
-  /// It is spelled out in the template rather than being what a carried slot does on its own,
-  /// because dropping a line reads as success: the file is written, the step reports done, and a
-  /// line the template says belongs in it is simply not there. Written by the author, at the one
-  /// place the value appears, it is a statement that the line belongs only where a value was
-  /// carried. Inferred, it would hide every template pointed at the wrong file.
+  /// **Carrying is offered ONLY together with dropping, and the mark `!?` says both halves.** A
+  /// carried value that is not there yet is the case carrying exists for, so a mark that carried
+  /// without saying what to do about the first write would leave the author with nothing to write
+  /// for the one state the file is guaranteed to pass through. Both halves in the mark, at the one
+  /// place the value appears, is what makes an absent line a statement of the template's rather than
+  /// a silence: the file is written, the step reports done, and the reader of the template can see
+  /// why the line is not in it.
   carriedOptional,
 }
 
@@ -66,24 +67,25 @@ class Slot {
   static const Map<SlotKind, String> _marks = <SlotKind, String>{
     SlotKind.required: '',
     SlotKind.optional: '?',
-    SlotKind.carried: '!',
     SlotKind.carriedOptional: '!?',
   };
-
-  /// Whether this slot takes its value from what stands in the file already.
-  bool get isCarried => kind == SlotKind.carried || kind == SlotKind.carriedOptional;
 }
 
-/// A slot: a lower-case name in angle brackets, possibly suffixed with ? or !, and nothing that
+/// A slot: a lower-case name in angle brackets, marked `?` or `!?` or not at all, and nothing that
 /// could be an expression.
 ///
 /// **The name admits letters, digits and the hyphen, and NOT the underscore.** A slot name is read
 /// by whoever writes a program row, so it reads as one word in one casing: `<upstream-servers>` and
 /// never `<upstream_servers>`. Admitting both would make two spellings of one name, and a row that
 /// picked the other one would go unfilled while looking correct.
-/// **The mark is read longest-first**, so `!?` is one mark and not a carried slot followed by
-/// something the grammar would then not accept.
-final RegExp slotPattern = RegExp(r'<([a-z][a-z0-9-]*)(!\?|[?!]?)>');
+///
+/// **`!` on its own is not a mark, and `<name!>` therefore matches nothing here.** Carrying is
+/// offered only together with dropping, for the reason [SlotKind.carriedOptional] gives, so the two
+/// characters are one mark and not two. A template that writes `<name!>` is in the same position as
+/// one that writes `<Stage>`: it named no slot, and what catches it is the caller's [leftoverSlotIn]
+/// scan, which is broader than this pattern precisely so that a spelling the grammar does not accept
+/// is still reported.
+final RegExp slotPattern = RegExp(r'<([a-z][a-z0-9-]*)(!\?|\??)>');
 
 /// The slots [text] carries, each named once, in the order they first appear.
 List<Slot> slotsIn(String text) {
@@ -94,7 +96,6 @@ List<Slot> slotsIn(String text) {
     final String suffix = match.group(2)!;
     final SlotKind kind = switch (suffix) {
       '?' => SlotKind.optional,
-      '!' => SlotKind.carried,
       '!?' => SlotKind.carriedOptional,
       _ => SlotKind.required,
     };
@@ -110,7 +111,10 @@ List<Slot> slotsIn(String text) {
 }
 
 /// [text] with the slot named by each entry of [values] holding that entry's value.
-/// This only replaces regular required slots. ? and ! slots need line-dropping logic and are handled in Template.
+///
+/// Only the unmarked slots. `<name?>` and `<name!?>` decide whether their LINE is written at all,
+/// which is a question about a file and not about a string, so `Template` answers it and this does
+/// not.
 ///
 /// A name with no slot in [text] is left for the caller to judge: an argument is free to use any
 /// part of what a run holds, while a template refuses a value with nowhere to go — that law

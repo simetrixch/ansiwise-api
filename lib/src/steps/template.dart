@@ -46,7 +46,9 @@ final class Template {
     final List<Slot> named = slots;
 
     final List<Slot> requiredSlots = named.where((Slot s) => s.kind == SlotKind.required).toList();
-    final List<Slot> carriedSlots = named.where((Slot s) => s.isCarried).toList();
+    final List<Slot> carriedSlots = named
+        .where((Slot s) => s.kind == SlotKind.carriedOptional)
+        .toList();
 
     final List<String> carriedSupplied = <String>[
       for (final Slot s in carriedSlots)
@@ -54,7 +56,7 @@ final class Template {
     ];
     if (carriedSupplied.isNotEmpty) {
       throw TemplateRefused(
-        'this run holds ${_asSlots(carriedSupplied, suffix: '!')} but they are carried slots, which never take values from a run',
+        'this run holds ${_asSlots(carriedSupplied, suffix: '!?')} but they are carried slots, which never take values from a run',
       );
     }
 
@@ -108,7 +110,7 @@ final class Template {
       if (dropLine) continue;
 
       // Replace required and optional slots first
-      for (final Slot s in slotsOnLine.where((Slot s) => !s.isCarried)) {
+      for (final Slot s in slotsOnLine.where((Slot s) => s.kind != SlotKind.carriedOptional)) {
         if (values.containsKey(s.name)) {
           line = line.replaceAll(s.text, values[s.name]!);
         }
@@ -116,7 +118,9 @@ final class Template {
 
       // A carried slot takes its value from the file as it stands, so the line it sits on is turned
       // into an expression over the previous content and the value is whatever stood there.
-      final List<Slot> carriedOnLine = slotsOnLine.where((Slot s) => s.isCarried).toList();
+      final List<Slot> carriedOnLine = slotsOnLine
+          .where((Slot s) => s.kind == SlotKind.carriedOptional)
+          .toList();
       if (carriedOnLine.length > 1) {
         // Two of them on one line cannot both be right. The expression built below puts `(.*)` in
         // place of each, and `(.*)` is greedy: the first would take everything up to the last
@@ -124,7 +128,7 @@ final class Template {
         // nobody can predict from reading the template. Refused rather than resolved at random.
         throw TemplateRefused(
           '$path line ${i + 1} carries ${carriedOnLine.length} carried slots — '
-          '${_asSlots(carriedOnLine.map((Slot s) => s.name).toList(), suffix: '!')} — and a line '
+          '${_asSlots(carriedOnLine.map((Slot s) => s.name).toList(), suffix: '!?')} — and a line '
           'may carry at most one, because two of them cannot be told apart in what they match',
         );
       }
@@ -143,28 +147,14 @@ final class Template {
           }
         }
 
-        if (match == null && carriedOnLine.single.kind == SlotKind.carriedOptional) {
-          // The one slot that says the line belongs only where a value was carried. Dropping it
-          // here is what the template ASKED FOR, spelled at the place the value appears — which is
-          // what tells this apart from the silent third answer refused below.
-          continue;
-        }
         if (match == null) {
-          // NOT dropped. A carried slot says "keep what is already there", and where there is
-          // nothing already there the honest answers are two: find the value, or say it cannot be
-          // found. Dropping the line is the third one, and it is the one that reads as success —
-          // the file is written, the step reports done, and a line the template says belongs in it
-          // is simply not in it. On a machine where the file does not exist yet, EVERY carried line
-          // would go that way, and the second run would read the file back without them and report
-          // that there was nothing left to do.
-          throw TemplateRefused(
-            previousText == null
-                ? '$path line ${i + 1} carries ${carriedOnLine.single.text}, which takes its value '
-                      'from what stands there already, and there is no earlier content to take it '
-                      'from — this is the first time this file is written'
-                : '$path line ${i + 1} carries ${carriedOnLine.single.text}, and no line of the '
-                      'earlier content has the shape "$line" — so there is no value to carry over',
-          );
+          // Nothing was carried: either this is the first time the file is written, or the earlier
+          // content holds no line of this shape. The line goes, and that is what the template ASKED
+          // FOR — the mark says both halves at the one place the value appears, so an absent line
+          // is a statement of the author's rather than a silence. A first write is the state every
+          // installation passes through, so it is the case the mark exists for and not an accident
+          // to refuse.
+          continue;
         }
         int groupIdx = 1;
         for (final Slot s in carriedOnLine) {
