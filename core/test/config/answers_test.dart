@@ -14,6 +14,59 @@ void main() {
   const String head =
       'name: deploy-thing\nroles: [master]\nsteps:\n  - step: a_step\n    on_failure: exit\n';
 
+  group('the condition an answer is stated under', () {
+    test('is one registered name, and nothing that compares', () {
+      final Program program = load(
+        '${head}answers:\n'
+        '  - name: db_host\n'
+        '    kind: text\n'
+        '    describes: the database host\n'
+        '    stated_when: {predicate: a_database_is_wanted}\n',
+      );
+
+      expect(program.answers.specs.single.statedWhen?.predicate, 'a_database_is_wanted');
+    });
+
+    test('THE PLANTED DEFECT: a comparison written in the file is refused', () {
+      // The shape this replaced. A file that can compare two values can compare anything, and then
+      // what an operator debugs is the file — so the loader refuses it rather than reading it.
+      expect(
+        () => load(
+          '${head}answers:\n'
+          '  - name: use_db\n'
+          '    kind: flag\n'
+          '    describes: whether to use a db\n'
+          '  - name: db_host\n'
+          '    kind: text\n'
+          '    describes: the database host\n'
+          '    stated_when: {answer: use_db, equals: "true"}\n',
+        ),
+        throwsA(
+          isA<ProgramInvalid>().having(
+            (ProgramInvalid each) => each.message,
+            'message',
+            allOf(contains('stated_when'), contains('registered condition')),
+          ),
+        ),
+      );
+    });
+
+    test('a second key beside the name is refused too', () {
+      // Half a comparison is still a comparison, and reading it would let the shape back in through
+      // a key nobody declared.
+      expect(
+        () => load(
+          '${head}answers:\n'
+          '  - name: db_host\n'
+          '    kind: text\n'
+          '    describes: the database host\n'
+          '    stated_when: {predicate: a_thing, equals: "true"}\n',
+        ),
+        throwsA(isA<ProgramInvalid>()),
+      );
+    });
+  });
+
   group('declaring them', () {
     test('reads a declaration in the order the file wrote it', () {
       final Program program = load(
