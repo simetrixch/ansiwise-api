@@ -4,4 +4,4 @@
 # gets while the two are being changed together, and it is gitignored so it never travels.
 dependency_overrides:
   ansiwise_checks_tree:
-    path: ../../ansiwise-checks/tree
+    path: ../ansiwise-checks/tree

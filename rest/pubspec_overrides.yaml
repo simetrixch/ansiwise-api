@@ -1,6 +1,0 @@
-# For working on both at once: the sibling package answers instead of the git pin.
-dependency_overrides:
-  ansiwise_core:
-    path: ../core
-  ansiwise_checks_tree:
-    path: ../../ansiwise-checks/tree

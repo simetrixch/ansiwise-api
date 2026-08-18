@@ -2,16 +2,15 @@
 
 Runs a declared program of steps against a machine, and can prove in advance what it would change.
 
-This repository holds **two packages**, because one name was doing the work of two:
+The framework: model, domain, engine, config, steps, infrastructure. It knows nothing about what is
+being deployed — a plugin brings all of that, and a check turns the tree red if any of it appears
+here.
 
-| package | what it is |
-|---|---|
-| `core/` | the framework — model, domain, engine, config, steps, infrastructure |
-| `rest/` | the REST resources of a deployment, and the adapter that serves them over a session's own pipes |
-
-Neither is an executable. The composition root is
-[`ansiwise-cli`](https://github.com/simetrixch/ansiwise-cli), and it is the only one — two binaries
-would mean two plugin lists to keep in step and a client having to know which of them a machine has.
+It is a library, and it used to mean two things at once: the framework, and the REST surface inside
+it. That surface is now [`ansiwise-rest`](https://github.com/simetrixch/ansiwise-rest). The only
+executable is the composition root in
+[`ansiwise-cli`](https://github.com/simetrixch/ansiwise-cli) — two binaries would mean two plugin
+lists to keep in step and a client having to know which of them a machine has.
 
 
 Runs a declared program of steps against a machine, and can prove in advance what it would change.
