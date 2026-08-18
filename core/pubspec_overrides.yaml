@@ -1,0 +1,7 @@
+# For working on both at once: a sibling checkout answers instead of the git pin.
+#
+# The pin in pubspec.yaml is what a clone gets and what a build uses. This file is what a developer
+# gets while the two are being changed together, and it is gitignored so it never travels.
+dependency_overrides:
+  ansiwise_checks_tree:
+    path: ../../ansiwise-checks/tree

@@ -1,4 +1,18 @@
-# ansiwise
+# ansiwise-core
+
+Runs a declared program of steps against a machine, and can prove in advance what it would change.
+
+This repository holds **two packages**, because one name was doing the work of two:
+
+| package | what it is |
+|---|---|
+| `core/` | the framework — model, domain, engine, config, steps, infrastructure |
+| `rest/` | the REST resources of a deployment, and the adapter that serves them over a session's own pipes |
+
+Neither is an executable. The composition root is
+[`ansiwise-cli`](https://github.com/simetrixch/ansiwise-cli), and it is the only one — two binaries
+would mean two plugin lists to keep in step and a client having to know which of them a machine has.
+
 
 Runs a declared program of steps against a machine, and can prove in advance what it would change.
 
