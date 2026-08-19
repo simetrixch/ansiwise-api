@@ -25,10 +25,29 @@ import 'dart:typed_data';
 /// be asking the wrong object.
 final class ChannelSocket extends Stream<Uint8List> implements Socket {
   /// Wraps the channel's input and output as one connection.
-  ChannelSocket({required Stream<List<int>> incoming, required this.outgoing})
-    : _incoming = incoming.map(Uint8List.fromList);
+  ChannelSocket({required Stream<List<int>> incoming, required this.outgoing}) {
+    _incoming = incoming
+        .map(Uint8List.fromList)
+        .transform(
+          StreamTransformer<Uint8List, Uint8List>.fromHandlers(
+            handleDone: (EventSink<Uint8List> sink) {
+              if (!_ended.isCompleted) {
+                _ended.complete();
+              }
+              sink.close();
+            },
+          ),
+        );
+  }
 
-  final Stream<Uint8List> _incoming;
+  late final Stream<Uint8List> _incoming;
+  final Completer<void> _ended = Completer<void>();
+
+  /// Completes when the far side stopped sending, which is when the session is over.
+  ///
+  /// Watched by whoever offered this connection, because a server that outlived its one channel
+  /// would be a process left behind on every machine anybody ever spoke to.
+  Future<void> get channelEnded => _ended.future;
 
   /// Where the answer's bytes go — the channel's standard output.
   final StreamSink<List<int>> outgoing;
@@ -109,11 +128,31 @@ final class ChannelSocket extends Stream<Uint8List> implements Socket {
 /// One and not many, because a session is one connection. A client that wants a second opens a
 /// second session, which SSH multiplexes over the same transport — so watching four machines at
 /// once is four channels, not a listening port.
+/// **IT HANDS THE CONNECTION OVER AND THEN STAYS OPEN, and the second half is what was missing.**
+/// `HttpServer.listenOn` ends its own stream of requests when the server socket it was given ends,
+/// and a stream that yields one value ends the moment it has yielded it. So the server closed in the
+/// same turn it was handed the connection, and the request that was already on its way arrived at a
+/// server that had shut: `serve` over a session answered nothing at all, exited zero, and said
+/// nothing about why.
+///
+/// It survived every test because a test feeds the connection from a `StreamController` whose data
+/// is already queued, so the request won the race against the close often enough to look correct.
+/// A real session loses that race every time. What ends this stream now is [close] and nothing else.
 final class ChannelServerSocket extends Stream<Socket> implements ServerSocket {
   /// Offers the given connection as the only one this server will ever accept.
   ChannelServerSocket(this._connection);
 
-  final Socket _connection;
+  final ChannelSocket _connection;
+
+  /// Holds the one connection, and stays open until the channel ends or [close] is called.
+  late final StreamController<Socket> _connections = StreamController<Socket>(
+    onListen: () {
+      _connections.add(_connection);
+      // The one thing that ends this by itself. A session that closed is a connection nobody is on
+      // any more, and a server still offering it would be a process left behind on that machine.
+      unawaited(_connection.channelEnded.whenComplete(close));
+    },
+  );
 
   @override
   StreamSubscription<Socket> listen(
@@ -121,9 +160,12 @@ final class ChannelServerSocket extends Stream<Socket> implements ServerSocket {
     Function? onError,
     void Function()? onDone,
     bool? cancelOnError,
-  }) => Stream<Socket>.value(
-    _connection,
-  ).listen(onData, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }) => _connections.stream.listen(
+    onData,
+    onError: onError,
+    onDone: onDone,
+    cancelOnError: cancelOnError,
+  );
 
   @override
   InternetAddress get address => InternetAddress.loopbackIPv4;
@@ -131,6 +173,12 @@ final class ChannelServerSocket extends Stream<Socket> implements ServerSocket {
   @override
   int get port => 0;
 
+  /// Stops offering connections, which is what ends the server above.
   @override
-  Future<ServerSocket> close() async => this;
+  Future<ServerSocket> close() async {
+    if (!_connections.isClosed) {
+      await _connections.close();
+    }
+    return this;
+  }
 }
