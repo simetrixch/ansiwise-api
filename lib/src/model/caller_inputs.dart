@@ -17,6 +17,9 @@
 /// knew. So the shape lives here, once, and a door parses nothing of its own.
 library;
 
+import '../domain/answers.dart';
+import '../domain/arguments.dart';
+
 /// What one run was told.
 final class CallerInputs {
   /// Holds [answers], and [elevationPassword] where the caller supplied one.
@@ -55,6 +58,13 @@ final class CallerInputs {
         '$where: "$answersField" holds ${supplied.runtimeType}, and answers are an object',
       );
     }
+    if (supplied.containsKey(elevationPasswordField)) {
+      throw InputsRejected(
+        '$where carries "$elevationPasswordField" among the answers, and that name holds the '
+        'password the run was started with — it is not an answer anybody sends\n'
+        'send it once, beside the answers, and the run fills it in for the program that asked',
+      );
+    }
     final Object? password = parsed[elevationPasswordField];
     if (password != null && (password is! String || password.isEmpty)) {
       throw InputsRejected('$where: "$elevationPasswordField" holds nothing usable');
@@ -82,6 +92,31 @@ final class CallerInputs {
 
   /// The password that raises a command to root, or null where the caller supplied none.
   final String? elevationPassword;
+
+  /// The answers [declared] is to be validated against, with the password filled in where it asked
+  /// for it by name.
+  ///
+  /// **A PROGRAM THAT HAS TO PERSIST THE PASSWORD NEEDS TO REACH IT**, and the caller already sent
+  /// it beside the answers. Declaring a second answer for the same thing would put it on the wire
+  /// twice, so a program declares one called [elevationPasswordField] and this fills it.
+  ///
+  /// **Called by every door before it validates and before it fingerprints, and both matter.** A
+  /// door that validates the raw answers refuses a program that declares this one; a door that
+  /// fingerprints without it computes a different fingerprint from the run that will carry it, and
+  /// the gate then refuses the real run for ever, asking for a dry proof of an input that never
+  /// existed.
+  Map<String, Object?> filledFor(DeclaredAnswers declared) {
+    final bool wanted = declared.specs.any(
+      (ArgumentSpec spec) => spec.name == elevationPasswordField,
+    );
+    if (!wanted) {
+      return answers;
+    }
+    if (elevationPassword case final String password) {
+      return <String, Object?>{...answers, elevationPasswordField: password};
+    }
+    return answers;
+  }
 
   /// The envelope, as a caller writes it.
   ///
