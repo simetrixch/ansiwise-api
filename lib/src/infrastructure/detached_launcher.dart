@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../domain/run_launcher.dart';
+import '../model/caller_inputs.dart';
 import '../model/mode.dart';
 import '../model/names.dart';
 
@@ -91,10 +92,7 @@ final class DetachedLauncher implements RunLauncher {
       // over the API die before it wrote its header, while the same run started by hand went
       // through: two doors, one of them speaking a shape the other had left behind.
       child.stdin.write(
-        jsonEncode(<String, Object?>{
-          'answers': answers,
-          if (elevationPassword case final String password) 'elevation_password': password,
-        }),
+        jsonEncode(CallerInputs(answers: answers, elevationPassword: elevationPassword).toJson()),
       );
       await child.stdin.flush();
       await child.stdin.close();

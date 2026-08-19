@@ -9,6 +9,7 @@ library;
 export 'src/model/record_json.dart';
 export 'src/config/loaded_catalogue.dart';
 export 'src/config/condition_binding.dart';
+export 'src/model/caller_inputs.dart';
 export 'src/config/configuration.dart';
 export 'src/config/elevation_source.dart';
 export 'src/config/program_loader.dart';
