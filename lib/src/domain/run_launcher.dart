@@ -34,6 +34,7 @@ abstract interface class RunLauncher {
     required ProgramName program,
     required Mode mode,
     Map<String, Object?> answers = const <String, Object?>{},
+    String? elevationPassword,
     RunId? resumes,
     List<Mode> waived = const <Mode>[],
   });

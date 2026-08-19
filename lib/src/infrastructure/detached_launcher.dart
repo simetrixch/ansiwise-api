@@ -40,11 +40,14 @@ final class DetachedLauncher implements RunLauncher {
     required ProgramName program,
     required Mode mode,
     Map<String, Object?> answers = const <String, Object?>{},
+    String? elevationPassword,
     RunId? resumes,
     List<Mode> waived = const <Mode>[],
   }) async {
     final RunId id = newRunId();
-    final bool hasAnswers = answers.isNotEmpty;
+    // Sent whenever there is anything to send. The password is part of what a caller hands a run,
+    // so a run with no answers and a password still gets stdio.
+    final bool hasInputs = answers.isNotEmpty || elevationPassword != null;
 
     // OVER STDIN, and the two routes not taken are the reason.
     //
@@ -72,17 +75,27 @@ final class DetachedLauncher implements RunLauncher {
         // Also argv, and for the same reason: which gate an installation waived is not a secret,
         // and the run has to write it into its own header where a reader will look for it.
         for (final Mode gate in waived) ...<String>['--waived', gate.flag],
-        if (hasAnswers) ...<String>['--answers', '-'],
+        if (hasInputs) ...<String>['--answers', '-'],
       ],
       workingDirectory: workingDirectory,
-      mode: hasAnswers ? ProcessStartMode.detachedWithStdio : ProcessStartMode.detached,
+      mode: hasInputs ? ProcessStartMode.detachedWithStdio : ProcessStartMode.detached,
     );
 
-    if (hasAnswers) {
+    if (hasInputs) {
       // Written and CLOSED. The child reads until end-of-input, so a pipe left open would hold it
       // at its first instruction forever — and this parent is a request handler that is about to
       // answer and forget the run exists.
-      child.stdin.write(jsonEncode(answers));
+      // THE ENVELOPE, never the bare answers. The child reads `{"answers": {...}}` with
+      // `elevation_password` beside it, which is the one shape both doors into this engine take —
+      // this one and the command line. Writing the bare map here is what made every run started
+      // over the API die before it wrote its header, while the same run started by hand went
+      // through: two doors, one of them speaking a shape the other had left behind.
+      child.stdin.write(
+        jsonEncode(<String, Object?>{
+          'answers': answers,
+          if (elevationPassword case final String password) 'elevation_password': password,
+        }),
+      );
       await child.stdin.flush();
       await child.stdin.close();
     }
