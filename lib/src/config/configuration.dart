@@ -6,6 +6,7 @@ import '../model/failures.dart';
 import '../model/names.dart';
 import '../model/run_event.dart';
 import 'condition_binding.dart';
+import 'elevation_source.dart';
 
 /// What the installation's own configuration says, read from one file beside the programs.
 ///
@@ -42,7 +43,7 @@ final class Configuration {
     this.requireDryRun = true,
     this.allowUnwind = true,
     this.conditions = const <String, ConditionBinding>{},
-    this.elevationPasswordFile,
+    this.elevation,
   });
 
   /// The name the file is looked for under, beside the programs.
@@ -85,15 +86,14 @@ final class Configuration {
   /// installation, as named slots each holding exactly one value.
   final Map<String, ConditionBinding> conditions;
 
-  /// The file holding the password that raises a command to root, or null where none is named.
+  /// Where the password that raises a command to root comes from, or null where none is named.
   ///
-  /// **No default, here or anywhere below.** A path baked into the framework is right on the
+  /// **No default, here or anywhere below.** A route baked into the framework is right on the
   /// machine it was written for and silently wrong on every other, and wrong here does not
   /// announce itself: the elevation fails, the command underneath it fails, and the record shows
   /// the command's own failure. An installation whose steps never need root names nothing and is
-  /// completely configured; one that does name it, and the file is read at start-up so a missing
-  /// one is a refusal before anything is touched.
-  final String? elevationPasswordFile;
+  /// completely configured.
+  final ElevationSource? elevation;
 
   /// Reads [path] through [files].
   ///
@@ -140,34 +140,56 @@ final class Configuration {
       requireDryRun: _requireDryRun(document, path),
       allowUnwind: _allowUnwind(document, path),
       conditions: _conditions(document, path),
-      elevationPasswordFile: _elevationPasswordFile(document, path),
+      elevation: _elevation(document, path),
     );
   }
 
-  /// The file [document] says the elevation password stands in, or null where it names none.
+  /// Where [document] says the elevation password comes from, or null where it names none.
   ///
   /// A block that is there and says nothing usable is refused rather than read past: somebody who
   /// wrote `elevation:` meant to configure elevation, and a key silently ignored leaves them
   /// believing they did.
-  static String? _elevationPasswordFile(YamlMap document, String path) {
+  ///
+  /// **Exactly one route, never two.** Naming both a file and the caller is two answers to one
+  /// question, and whichever this picked would be the one somebody did not mean.
+  static ElevationSource? _elevation(YamlMap document, String path) {
     final Object? elevation = document['elevation'];
     if (elevation == null) {
       return null;
     }
     if (elevation is! YamlMap) {
       throw PluginRejected(
-        '$path: "elevation" has to be a mapping, with "password_file:" under it',
+        '$path: "elevation" has to be a mapping, with either "password_file:" or '
+        '"password_from_caller: true" under it',
       );
     }
     final Object? file = elevation['password_file'];
-    if (file is! String || file.isEmpty) {
+    final Object? fromCaller = elevation['password_from_caller'];
+
+    if (fromCaller != null && fromCaller is! bool) {
       throw PluginRejected(
-        '$path: "elevation" says no "password_file:", so nothing says where the password that '
-        'raises a command to root comes from\n'
-        'name the file holding it, or leave the whole block off where nothing needs root',
+        '$path: "elevation" says "password_from_caller: $fromCaller", and it is true or false',
       );
     }
-    return file;
+    if (fromCaller == true && file != null) {
+      throw PluginRejected(
+        '$path: "elevation" names both "password_file:" and "password_from_caller: true", and a '
+        'run takes the password from one place\n'
+        'keep the route this installation uses and remove the other',
+      );
+    }
+    if (fromCaller == true) {
+      return const ElevationFromCaller();
+    }
+    if (file is String && file.isNotEmpty) {
+      return ElevationFromFile(file);
+    }
+    throw PluginRejected(
+      '$path: "elevation" says neither "password_file:" nor "password_from_caller: true", so '
+      'nothing says where the password that raises a command to root comes from\n'
+      'name the file holding it, or say the caller hands it over, or leave the whole block off '
+      'where nothing needs root',
+    );
   }
 
   /// The conditions [document] names, or none where it names none.

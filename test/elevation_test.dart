@@ -84,15 +84,51 @@ void main() {
 
     test('names the file, and there is no path anywhere to fall back to', () async {
       expect(
-        (await read(
-          'plugins:\n  - one\nelevation:\n  password_file: /home/op/.pass\n',
-        )).elevationPasswordFile,
-        '/home/op/.pass',
+        (await read('plugins:\n  - one\nelevation:\n  password_file: /home/op/.pass\n')).elevation,
+        const ElevationFromFile('/home/op/.pass'),
+      );
+    });
+
+    test('or names the caller, and then nothing on this machine holds it', () async {
+      expect(
+        (await read('plugins:\n  - one\nelevation:\n  password_from_caller: true\n')).elevation,
+        const ElevationFromCaller(),
+      );
+    });
+
+    test('naming BOTH routes is refused — two answers to one question', () {
+      // Whichever this picked would be the one somebody did not mean, and the one it dropped is the
+      // one they would go on believing was in use.
+      expect(
+        read(
+          'plugins:\n  - one\nelevation:\n  password_file: /home/op/.pass\n'
+          '  password_from_caller: true\n',
+        ),
+        throwsA(
+          isA<PluginRejected>().having(
+            (PluginRejected refused) => refused.message,
+            'message',
+            contains('names both'),
+          ),
+        ),
+      );
+    });
+
+    test('a caller route that is not true or false is refused', () {
+      expect(
+        read('plugins:\n  - one\nelevation:\n  password_from_caller: sometimes\n'),
+        throwsA(
+          isA<PluginRejected>().having(
+            (PluginRejected refused) => refused.message,
+            'message',
+            contains('it is true or false'),
+          ),
+        ),
       );
     });
 
     test('a file that says nothing about it names nothing', () async {
-      expect((await read('plugins:\n  - one\n')).elevationPasswordFile, isNull);
+      expect((await read('plugins:\n  - one\n')).elevation, isNull);
     });
 
     test('an elevation block with no file is refused rather than read past', () {
@@ -104,7 +140,7 @@ void main() {
           isA<PluginRejected>().having(
             (PluginRejected refused) => refused.message,
             'message',
-            contains('says no "password_file:"'),
+            contains('says neither "password_file:" nor "password_from_caller: true"'),
           ),
         ),
       );
