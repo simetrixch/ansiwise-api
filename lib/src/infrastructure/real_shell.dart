@@ -62,7 +62,9 @@ final class RealShell implements Shell {
         throw ElevationUnavailable(
           '${command.argv.join(' ')} has to run as root, and nothing says where the elevation '
           'password comes from\n'
-          'name the file holding it in the installation\'s configuration',
+          'the installation\'s configuration names one of two sources under "elevation": '
+          '"password_from_caller: true", and then whoever starts the run sends it beside the '
+          'answers, or "password_file:" with a path on this machine',
         );
       }
       executable = 'sudo';
