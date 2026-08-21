@@ -22,13 +22,15 @@ import '../domain/resolved_program.dart';
 ///   run of another
 /// - **whether each row may be taken back**, because a row whose undo is switched off moves the
 ///   point of no return, and the operator read that boundary off the dry run
-/// - **the WIRING of every argument whose value is measured while the run happens** — the name it
+/// - **the WIRING of every place whose value is measured while the run happens** — the name it
 ///   takes, and the row that produces it. The value itself cannot be here: it does not exist yet
-///   when this is computed. What the material therefore states is exactly which arguments were left
+///   when this is computed. What the material therefore states is exactly which places were left
 ///   out and where each of them will come from, so a row rewired between two runs cannot hash like
-///   the one before it. A row is only ever bound to a measurement the resolver found an earlier row
-///   publishing, and only ever on an argument the step declares — which is what makes walking the
-///   DECLARED arguments below enough to see every wiring there is
+///   the one before it. There are TWO such places and both are written: a whole ARGUMENT, and one
+///   ENTRY of a mapping argument. The entry needs its own field even though the mapping's value is
+///   already here, because the body an entry carries names only the MEASUREMENT — which row
+///   publishes that name is decided by the renames the rows carry, and a rename is nowhere in this
+///   material
 /// - **every condition a row is gated on, and what that condition was pointed at** — a generic
 ///   condition is named by the installation and told what to look at there, so the name alone says
 ///   only half of what decides whether a row runs
@@ -94,6 +96,20 @@ String fingerprintOf({
       final Object? given = step.entry.arguments.raw(spec.name);
       _valued(material, 'argument.${spec.name}', given ?? spec.defaultValue);
     }
+    // The same wiring, one level down, for the ENTRY of a mapping argument. The body the row wrote
+    // is already in the material above — it is part of the mapping's own value — and the body says
+    // only which NAME the entry takes. Which row publishes that name is decided by the renames the
+    // rows carry, and a rename is nowhere in this material: two programs writing the same words in
+    // the same order, with the renames of two measuring rows swapped between them, put a different
+    // row's reading in the slot and would otherwise hash alike.
+    //
+    // Already sorted by argument and then by entry, by the resolver that read them out of the
+    // mapping, so the order the file happened to write the keys in is not part of the input.
+    for (final MeasuredSlot slot in step.measuredSlots) {
+      final String entry = 'argument.${slot.argument}.entry.${slot.slot}';
+      _field(material, '$entry.measured', slot.measurement.value);
+      _field(material, '$entry.measured.from', '${slot.position}:${slot.publisher.value}');
+    }
     for (final RegisteredPredicate predicate in step.when) {
       _field(material, 'when', predicate.name.value);
       // What the condition was pointed at, where an installation pointed it. The name alone would
@@ -125,11 +141,13 @@ void _field(StringBuffer material, String name, String value) {
 /// as nothing lead a step to do different things, so the two must not hash alike - and any marker
 /// written in the value's place would be a value some run could legitimately hold.
 ///
-/// **A LIST is written entry by entry, and never as one string.** `['a', 'b'].toString()` and
-/// `['a, b'].toString()` are both `[a, b]`, so a list written through `toString` hashes two different
-/// runs alike: a gate demanding two commands, and a gate demanding one command whose name happens to
-/// contain a comma. The length in front of a field guards the boundary between FIELDS; this is the
-/// boundary between ENTRIES, and it needs its own.
+/// **A LIST and a MAPPING are written entry by entry, and never as one string.** `['a', 'b']` and
+/// `['a, b']` both print as `[a, b]`, and `{'a': 'x', 'b': 'y'}` and `{'a': 'x, b: y'}` both print as
+/// `{a: x, b: y}` — so either written through `toString` hashes two different runs alike: a gate
+/// demanding two commands and a gate demanding one command whose name contains a comma, a text with
+/// two slots filled and a text with one slot whose value contains the separator. The length in front
+/// of a field guards the boundary between FIELDS; this is the boundary between ENTRIES, and it needs
+/// its own.
 void _valued(StringBuffer material, String name, Object? value) {
   if (value == null) {
     _field(material, '$name.absent', '');
@@ -141,6 +159,21 @@ void _valued(StringBuffer material, String name, Object? value) {
     _field(material, '$name.count', entries.length.toString());
     for (int at = 0; at < entries.length; at += 1) {
       _valued(material, '$name.$at', entries[at]);
+    }
+    return;
+  }
+  if (value case final Map<String, Object?> entries) {
+    // The list case one level up, and it needs its own boundary for the same reason.
+    // `{'a': 'x, b: y'}` and `{'a': 'x', 'b': 'y'}` both print as `{a: x, b: y}`, so a mapping
+    // written through toString hashes two different runs alike: a text with two slots filled, and a
+    // text with one slot whose value contains the separator.
+    //
+    // SORTED, unlike a list. A list is ordered on purpose — the words a command is started with —
+    // while a mapping is named slots a step reads by name, so a file writing them in another order
+    // is the same run.
+    _field(material, '$name.count', entries.length.toString());
+    for (final String key in entries.keys.toList()..sort()) {
+      _valued(material, '$name.$key', entries[key]);
     }
     return;
   }

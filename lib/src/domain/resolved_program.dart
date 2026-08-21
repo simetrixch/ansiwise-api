@@ -26,22 +26,26 @@ final class ResolvedProgram {
   final List<ResolvedStep> steps;
 }
 
-/// One argument of a row whose value is measured while the run happens, and by the row that
-/// measures it.
+/// One place on a row whose value is measured while the run happens, and the row that measures it.
 ///
 /// Bound by the resolver, so everything after it — the fingerprint, the plan, the record — reads one
 /// answer to "where does this value come from" rather than each working it out of the program again.
+///
+/// **Two places, one set of rules.** A whole ARGUMENT takes a measurement, and so does one ENTRY of
+/// a mapping argument. Which row may produce the value, where that row has to stand, and what it may
+/// be gated on are the same questions for both, asked once against the same table — so they are one
+/// kind of thing here, and the two below differ only in what they say they fill.
 @immutable
-final class MeasuredArgument {
-  /// Binds [argument] of a row to [measurement], which [publisher] at [position] produces.
-  const MeasuredArgument({
+sealed class MeasuredValue {
+  /// Binds a place on a row to [measurement], which [publisher] at [position] produces.
+  const MeasuredValue({
     required this.argument,
     required this.measurement,
     required this.publisher,
     required this.position,
   });
 
-  /// The argument of the reading row that this value fills.
+  /// The argument of the reading row that this value reaches.
   final String argument;
 
   /// The name it is published under.
@@ -53,11 +57,52 @@ final class MeasuredArgument {
   /// Where that row stands in the program, counted from zero.
   final int position;
 
+  /// What this fills, as a plan and a refusal name it.
+  String get fills;
+
   /// The row that produces it, as a plan and a refusal name it.
   ///
   /// Counted from one here and from zero in [position], because the operator reading a file counts
   /// its first row as the first one.
   String get producedBy => 'step ${position + 1} $publisher';
+}
+
+/// One whole argument of a row whose value is measured while the run happens.
+@immutable
+final class MeasuredArgument extends MeasuredValue {
+  /// Binds [argument] of a row to [measurement], which [publisher] at [position] produces.
+  const MeasuredArgument({
+    required super.argument,
+    required super.measurement,
+    required super.publisher,
+    required super.position,
+  });
+
+  @override
+  String get fills => '"$argument"';
+}
+
+/// One entry of a row's mapping argument whose value is measured while the run happens.
+///
+/// The engine writes the value into the entry as the row would have written it out, so the step
+/// reading the mapping reads a value and learns nothing about where it came from.
+@immutable
+final class MeasuredSlot extends MeasuredValue {
+  /// Binds the entry [slot] of [argument] to [measurement], which [publisher] at [position]
+  /// produces.
+  const MeasuredSlot({
+    required super.argument,
+    required this.slot,
+    required super.measurement,
+    required super.publisher,
+    required super.position,
+  });
+
+  /// The name the entry stands under inside the mapping.
+  final String slot;
+
+  @override
+  String get fills => '"$argument" entry "$slot"';
 }
 
 /// One entry of a program, bound to the classes it names.
@@ -69,6 +114,7 @@ final class ResolvedStep {
     required this.registered,
     required this.when,
     this.measured = const <MeasuredArgument>[],
+    this.measuredSlots = const <MeasuredSlot>[],
   });
 
   /// What the file said about this step.
@@ -87,6 +133,26 @@ final class ResolvedStep {
   /// step runs. That is why the dry run says the value is not known yet and the record counts the
   /// row as declared rather than proven.
   final List<MeasuredArgument> measured;
+
+  /// The entries of this row's mapping arguments whose value is measured while the run happens.
+  ///
+  /// Held apart from [measured] because they fill different places: one is the whole of an argument
+  /// and the other is one entry inside one. Everything that asks WHETHER this row takes a
+  /// measurement asks [takesAMeasurement], which covers both.
+  final List<MeasuredSlot> measuredSlots;
+
+  /// Whether anything on this row takes its value from a measurement.
+  ///
+  /// **Every branch that decides something about a measured row asks THIS, and none of them asks
+  /// [measured] on its own.** A row wired only through a mapping entry is a row the gate could not
+  /// speak on in full, exactly as one wired through a whole argument is — its value was not in the
+  /// fingerprint either. Asked through [measured] alone, such a row answers that nothing here is
+  /// measured: it would be built in a dry run on a value that does not exist, and stamped proven in
+  /// a real one.
+  bool get takesAMeasurement => measured.isNotEmpty || measuredSlots.isNotEmpty;
+
+  /// Everything on this row that is measured, arguments and mapping entries together.
+  List<MeasuredValue> get measuredValues => <MeasuredValue>[...measured, ...measuredSlots];
 
   /// Where [argument] takes its value from, or null when the row wrote it or left it to a default.
   MeasuredArgument? measurementFor(String argument) {

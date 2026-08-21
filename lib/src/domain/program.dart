@@ -76,6 +76,7 @@ final class ProgramStep {
     required this.onFailure,
     this.arguments = Arguments.none,
     this.reads = const <String, MeasurementName>{},
+    this.publish = const <MeasurementName, MeasurementName>{},
     this.when = const <PredicateName>[],
     this.undo = true,
     this.restsOnAnEarlierStep = false,
@@ -113,6 +114,26 @@ final class ProgramStep {
   /// condition may skip while this row runs, and a step that cannot be built at all while the value
   /// is missing — which is what everything examining a program before it runs has to do.
   final Map<String, MeasurementName> reads;
+
+  /// The name this row publishes each of its step's measurements under.
+  ///
+  /// Keyed by a name the step's registry entry DECLARES, valued by the name this row publishes it
+  /// under — `publish: {http_field: run_id}`. A name left out is published as the step declares it,
+  /// which is what every row that says nothing here does.
+  ///
+  /// **What it is for.** The name a step publishes is fixed by its class, so two rows of one program
+  /// running the SAME step publish one name twice — and the resolver refuses that program, because
+  /// nothing says which of the two values a row taking the name would get. A program that has to
+  /// carry two values out of two answers could not be written at all. The rename is what a row says
+  /// instead, and it says it as data: one name standing for one name, nothing computed, nothing
+  /// conditional.
+  ///
+  /// **The step is never told.** It publishes the name its class declares, in every program; the
+  /// sink the engine hands it writes the name this row chose.
+  ///
+  /// **What the resolver refuses about it**, before anything runs: a name the step's registry entry
+  /// does not publish, and a rename that lands two rows on one name again.
+  final Map<MeasurementName, MeasurementName> publish;
 
   /// The conditions that must all hold for this step to run.
   ///

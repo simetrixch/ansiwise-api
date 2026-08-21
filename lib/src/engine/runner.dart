@@ -228,7 +228,11 @@ final class Runner {
     // One collection for the whole walk, because a value one row measures is taken by a later one.
     // It belongs to the RUN and not to the runner: two runs of one program are two machines' worth
     // of measurements, and a collection that outlived a run would carry one into the other.
-    final Measurements measurements = Measurements();
+    //
+    // It is given this run's redactor because a step may publish a credential. Registering it
+    // where it is published is the only moment that hides it everywhere: the same redactor is
+    // already held by the shell, the http port, the logger and the file the record is written to.
+    final Measurements measurements = Measurements(redactor);
     final List<StepRecord> records = <StepRecord>[];
     final List<AppliedStep> applied = <AppliedStep>[];
     final List<String> issues = <String>[];

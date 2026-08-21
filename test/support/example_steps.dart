@@ -410,3 +410,163 @@ final class ChangesThenThrows extends ReversibleStep<String?> with FileStep {
       ? context.files.delete(path)
       : context.files.write(path, captured, mode: mode);
 }
+
+/// A step that mints a credential while the run happens and publishes it.
+///
+/// The shape mechanism 3 exists for: the value is in no answer, in no program file and in nothing
+/// the redactor was built from, because it did not exist when the run started.
+final class MintsACredential extends ObservingStep {
+  const MintsACredential({required this.publishes});
+
+  /// The name it publishes under. Whether that name is secret is the registry entry's word, not
+  /// this class's — which is what the two registries below are for.
+  final MeasurementName publishes;
+
+  @override
+  Future<CheckResult> check(StepContext context) async {
+    context.measurements.publish(publishes, context.entropy.hex(16));
+    return const CheckResult.satisfied('a credential was minted for this run');
+  }
+}
+
+/// A step that writes the credential to the record BEFORE it publishes it, and once afterwards.
+///
+/// Where the registration actually starts, measured from both sides in one row: the first line is
+/// written while nothing knows the value, the second after the sink has registered it. A step
+/// written this way is a defect in the step, and this one exists so a record can be read for which
+/// of the two lines the redactor could still reach.
+final class MintsAndLogsBeforePublishing extends ObservingStep {
+  const MintsAndLogsBeforePublishing({required this.publishes});
+
+  /// The name it publishes under.
+  final MeasurementName publishes;
+
+  /// What the line written BEFORE the value is published begins with.
+  static const String beforeSaid = 'about to publish';
+
+  /// What the line written AFTER it is published begins with.
+  static const String afterSaid = 'published';
+
+  @override
+  Future<CheckResult> check(StepContext context) async {
+    final String minted = context.entropy.hex(16);
+    context.log.info('$beforeSaid $minted');
+    context.measurements.publish(publishes, minted);
+    context.log.info('$afterSaid $minted');
+    return const CheckResult.satisfied('a credential was minted for this run');
+  }
+}
+
+/// A step that carries a credential to an address, on every surface a record keeps.
+///
+/// It puts the value in the ADDRESS, in the authorization header and in a line of its own, because
+/// those reach the record by three different routes: `RequestSent.url` is redacted by value,
+/// `hideHeaders` blanks the header by NAME whatever it holds, and a log line is redacted by value
+/// as it is written. Only the first and the third say anything about whether the value is known to
+/// the redactor at all.
+final class SendsACredential extends IrreversibleStep {
+  const SendsACredential({required this.url, required this.token});
+
+  factory SendsACredential.fromArguments(Arguments arguments) =>
+      SendsACredential(url: arguments.text('url'), token: arguments.optionalText('token') ?? '');
+
+  /// What this step accepts.
+  static const List<ArgumentSpec> arguments = <ArgumentSpec>[
+    ArgumentSpec(name: 'url', kind: ArgumentKind.text, describes: 'where the request goes'),
+    ArgumentSpec(
+      name: 'token',
+      kind: ArgumentKind.text,
+      required: false,
+      secret: true,
+      describes: 'the credential the request carries',
+    ),
+  ];
+
+  /// The address the request goes to.
+  final String url;
+
+  /// The credential it carries.
+  final String token;
+
+  @override
+  String get irreversibleReason => 'the other end has been told, and nothing here can untell it';
+
+  @override
+  Future<CheckResult> check(StepContext context) async =>
+      await context.files.exists('/var/lib/told')
+      ? const CheckResult.satisfied('the other end has been told')
+      : const CheckResult.ready();
+
+  @override
+  Future<StepPlan> plan(StepContext context) async => StepPlan.nothing('would tell $url');
+
+  @override
+  Future<void> apply(StepContext context) async {
+    context.log.info('sending the credential $token to $url');
+    await context.http.send(
+      HttpRequest(
+        'POST',
+        '$url?token=$token',
+        headers: <String, String>{'authorization': 'Bearer $token'},
+      ),
+    );
+    await context.files.write('/var/lib/told', 'told', mode: 0x1a4);
+  }
+}
+
+/// A step that writes a text whose slots are filled from a mapping argument.
+///
+/// The mapping is the framework's grammar and not this step's: every entry is either a value
+/// standing under its name or a body the framework read and filled, so what arrives here is text
+/// either way.
+final class FillsSlotsFromAMapping extends ReversibleStep<String?> with FileStep {
+  FillsSlotsFromAMapping({required this.path, required this.template, required this.values});
+
+  factory FillsSlotsFromAMapping.fromArguments(Arguments arguments) => FillsSlotsFromAMapping(
+    path: arguments.text('path'),
+    template: arguments.text('template'),
+    values: <String, String>{
+      for (final MapEntry<String, Object?> each
+          in (arguments.raw('values') as Map<String, Object?>? ?? const <String, Object?>{})
+              .entries)
+        if (each.value case final String written) each.key: written,
+    },
+  );
+
+  /// What this step accepts.
+  static const List<ArgumentSpec> arguments = <ArgumentSpec>[
+    ArgumentSpec(name: 'path', kind: ArgumentKind.text, describes: 'the file it writes'),
+    ArgumentSpec(name: 'template', kind: ArgumentKind.text, describes: 'the text, with its slots'),
+    ArgumentSpec(
+      name: 'values',
+      kind: ArgumentKind.mapping,
+      required: false,
+      describes: 'what fills each slot of the text',
+    ),
+  ];
+
+  final String path;
+
+  final String template;
+
+  /// What each slot of the text holds, by the slot's name.
+  final Map<String, String> values;
+
+  @override
+  String pathFor(StepContext context) => path;
+
+  @override
+  int get mode => 0x1a4;
+
+  @override
+  Future<FileContent> contentFor(StepContext context) async =>
+      FileContent.text(filledSlots(template, values));
+
+  @override
+  Future<String?> capture(StepContext context) => contentBefore(context);
+
+  @override
+  Future<void> undo(StepContext context, String? captured) async => captured == null
+      ? context.files.delete(path)
+      : context.files.write(path, captured, mode: mode);
+}

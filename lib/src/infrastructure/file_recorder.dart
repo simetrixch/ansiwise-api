@@ -25,9 +25,11 @@ final class FileRecorder implements Recorder {
 
   /// Opens the record of run [id] under [directory], creating the directory and the event file.
   ///
-  /// [redactor] is what is taken out of everything on its way in. A run with nothing to hide passes
-  /// [Redactor.none] rather than leaving it out, because a recorder that could be built without one
-  /// is a recorder somebody builds without one.
+  /// [redactor] is what is taken out of everything on its way in, and it is the RUN'S OWN — the same
+  /// object its ports, its logger and its measurement sink hold, so a credential registered while the
+  /// run happens is hidden here too. A run with nothing to hide passes one built from no secrets
+  /// rather than leaving it out, because a recorder that could be built without one is a recorder
+  /// somebody builds without one.
   static Future<FileRecorder> open({
     required RunId id,
     required RunDirectory directory,

@@ -391,7 +391,11 @@ void main() {
       );
     });
 
-    test('a SECRET argument, because nothing could remove the value from the record', () {
+    test('a SECRET argument filled from a measurement that is not secret', () {
+      // The one thing that hides a value which did not exist before the run is the sink registering
+      // it where it is published, and only a measurement DECLARED secret is registered. An argument
+      // the program calls secret and fills from an unregistered value would tell every reader the
+      // value is hidden while the record carried it in the clear.
       expect(
         () => ProgramResolver(registry()).resolve(measureThenWrite(argument: 'token')),
         throwsA(
@@ -399,8 +403,8 @@ void main() {
             (ProgramInvalid e) => e.message,
             'message',
             allOf(
-              contains('"token" is secret'),
-              contains('what removes a credential from the record is built before the run'),
+              contains('"token" is secret while that measurement is not'),
+              contains('Declare both or neither'),
             ),
           ),
         ),
@@ -552,7 +556,7 @@ void main() {
 
   group('a step publishes what it declares, and only what it read', () {
     test('a name the registry entry does not declare is refused', () {
-      final Measurements taken = Measurements();
+      final Measurements taken = Measurements(Redactor.none);
       final MeasurementSink sink = taken.forStep(
         const StepName('measures'),
         const <MeasurementSpec>[MeasurementSpec(name: backend, describes: 'the backend')],
@@ -572,7 +576,7 @@ void main() {
     });
 
     test('an empty reading is refused, because nothing read is not a value', () {
-      final Measurements taken = Measurements();
+      final Measurements taken = Measurements(Redactor.none);
       final MeasurementSink sink = taken.forStep(
         const StepName('measures'),
         const <MeasurementSpec>[MeasurementSpec(name: backend, describes: 'the backend')],

@@ -270,25 +270,107 @@ void main() {
     expect(resolved.steps, hasLength(1));
   });
 
-  test('an entry that names no answer at all is passed over, not guessed at', () {
-    // A mapping carries data a step reads itself as well as bindings. An entry saying nothing about
-    // an answer says nothing this check is about.
+  test('an entry whose value is written out names no source and is passed over', () {
+    // A mapping carries data a step reads itself as well as bindings. A value standing under the
+    // entry's name says nothing about where it came from, because it came from the file.
     final ResolvedProgram resolved = const ProgramResolver(_bindsSlotsToAnswers).resolve(
       programOf(
         'p',
         <(String, OnFailure, List<String>)>[('fills_a_template', OnFailure.exit, <String>[])],
         arguments: <String, Arguments>{
           'fills_a_template': const Arguments(<String, Object>{
-            'values': <String, Object?>{
-              'literal': 'a value written here',
-              'nested': <String, Object?>{'join': ','},
-            },
+            'values': <String, Object?>{'literal': 'a value written here'},
           }),
         },
       ),
     );
 
     expect(resolved.steps, hasLength(1));
+  });
+
+  test('an entry naming BOTH sources is refused, because nothing says which', () {
+    // The framework owns two words and writes into one of them, so it has to know where a value
+    // comes from. Two sources under one name is the case where it cannot: whichever it filled would
+    // be a guess, and the other would stand in the text as its own characters for whatever reads it
+    // next to take as content.
+    expect(
+      () => const ProgramResolver(_bindsSlotsToAnswers).resolve(
+        programOf(
+          'p',
+          <(String, OnFailure, List<String>)>[('fills_a_template', OnFailure.exit, <String>[])],
+          arguments: <String, Arguments>{
+            'fills_a_template': const Arguments(<String, Object>{
+              'values': <String, Object?>{
+                'nested': <String, Object?>{'answer': 'a', 'measured': 'm'},
+              },
+            }),
+          },
+        ),
+      ),
+      throwsA(
+        isA<ProgramInvalid>().having(
+          (ProgramInvalid failure) => failure.message,
+          'message',
+          allOf(
+            contains('"values" entry "nested"'),
+            contains('which of them the value comes from'),
+          ),
+        ),
+      ),
+    );
+  });
+
+  test('THE INNOCENT NEIGHBOUR: a body naming neither is the STEP\'s, and is passed over', () {
+    // Rows that ship carry `{answer: a, join: ","}` and `{file: ..., key: ..., split: ", "}`. The
+    // properties beside a source, and a source the framework has no word for at all, belong to the
+    // step that declared the mapping — reading them would put its private vocabulary in the engine.
+    // test/mapping_bodies_test.dart holds the shipped rows themselves.
+    expect(
+      () => const ProgramResolver(_bindsSlotsToAnswers).resolve(
+        programOf(
+          'p',
+          <(String, OnFailure, List<String>)>[('fills_a_template', OnFailure.exit, <String>[])],
+          arguments: <String, Arguments>{
+            'fills_a_template': const Arguments(<String, Object>{
+              'values': <String, Object?>{
+                'nested': <String, Object?>{'file': '/srv/map.yaml', 'key': 'k', 'join': ','},
+              },
+            }),
+          },
+        ),
+      ),
+      returnsNormally,
+    );
+  });
+
+  test('an entry naming a measurement of the wrong shape is refused for THAT reason', () {
+    // Told that its body is neither of the two, a reader looking at a body that plainly says
+    // `measured:` goes to the wrong file. The refusal names the half that is actually wrong.
+    expect(
+      () => const ProgramResolver(_bindsSlotsToAnswers).resolve(
+        programOf(
+          'p',
+          <(String, OnFailure, List<String>)>[('fills_a_template', OnFailure.exit, <String>[])],
+          arguments: <String, Arguments>{
+            'fills_a_template': const Arguments(<String, Object>{
+              'values': <String, Object?>{
+                'build-plane': <String, Object?>{'measured': 'Build.Plane'},
+              },
+            }),
+          },
+        ),
+      ),
+      throwsA(
+        isA<ProgramInvalid>().having(
+          (ProgramInvalid failure) => failure.message,
+          'message',
+          allOf(
+            contains('"values" entry "build-plane" takes the measurement "Build.Plane"'),
+            contains('that is not a measurement name'),
+          ),
+        ),
+      ),
+    );
   });
 
   test('a step reading an answer the program declares resolves', () {

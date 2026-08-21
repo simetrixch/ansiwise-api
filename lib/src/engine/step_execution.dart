@@ -79,7 +79,7 @@ final class StepExecution {
     // A caller that runs one step by itself gets a collection of its own, so a step that publishes
     // does not throw on a sink that is not there. Nothing reads it: one step is not a program, and
     // a row taking a value is bound to a row of the same program by the resolver.
-    final Measurements taken = measurements ?? Measurements();
+    final Measurements taken = measurements ?? Measurements(redactor);
 
     final PredicateName? blocking = _blockedBy(resolved, facts);
     if (blocking != null) {
@@ -103,7 +103,7 @@ final class StepExecution {
     // measures this value has not done its work, so there is nothing to build this step with. It is
     // not asked what it would do: a step asked with a stand-in answers about a file or a command the
     // run need not touch, and the operator reads that as knowledge.
-    if (mode != Mode.run && resolved.measured.isNotEmpty) {
+    if (mode != Mode.run && resolved.takesAMeasurement) {
       return _notKnownYet(resolved: resolved, mode: mode, start: start, firstEvent: firstEvent);
     }
 
@@ -113,8 +113,8 @@ final class StepExecution {
       resolved.registered,
       resolved.entry.arguments,
     );
-    final List<MeasuredArgument> missing = <MeasuredArgument>[
-      for (final MeasuredArgument each in resolved.measured)
+    final List<MeasuredValue> missing = <MeasuredValue>[
+      for (final MeasuredValue each in resolved.measuredValues)
         if (taken.valueOf(each.measurement) == null) each,
     ];
     if (missing.isNotEmpty) {
@@ -130,7 +130,7 @@ final class StepExecution {
       );
     }
     final Arguments arguments = _withMeasured(resolved, withDefaults, taken);
-    if (resolved.measured.isNotEmpty) {
+    if (resolved.takesAMeasurement) {
       _sayWhatIsNotProven(name, _duringTheRunSaid(resolved));
     }
 
@@ -187,21 +187,21 @@ final class StepExecution {
 
   /// What the plan of a row whose value is not known yet says, one reading per clause.
   String _notKnownYetSaid(ResolvedStep resolved) => <String>[
-    for (final MeasuredArgument each in resolved.measured)
-      '"${each.argument}" holds the measurement "${each.measurement}", which ${each.producedBy} '
+    for (final MeasuredValue each in resolved.measuredValues)
+      '${each.fills} holds the measurement "${each.measurement}", which ${each.producedBy} '
           'takes while the run happens',
   ].join('; ');
 
   /// What the record says about a row that ran on a value measured during the run.
   String _duringTheRunSaid(ResolvedStep resolved) =>
-      '${<String>[for (final MeasuredArgument each in resolved.measured) '"${each.argument}" holds the measurement "${each.measurement}", taken by '
+      '${<String>[for (final MeasuredValue each in resolved.measuredValues) '${each.fills} holds the measurement "${each.measurement}", taken by '
             '${each.producedBy} during this run'].join('; ')} — a value measured while the run happens was not in the fingerprint the gate '
       'spoke on, so this row is declared rather than proven';
 
   /// What a row says when the measurement it takes was never published.
-  String _missingSaid(List<MeasuredArgument> missing) => <String>[
-    for (final MeasuredArgument each in missing)
-      'the measurement "${each.measurement}" was never published, so "${each.argument}" has no '
+  String _missingSaid(List<MeasuredValue> missing) => <String>[
+    for (final MeasuredValue each in missing)
+      'the measurement "${each.measurement}" was never published, so ${each.fills} has no '
           'value — ${each.producedBy} produces it, and it did not',
   ].join('; ');
 
@@ -222,12 +222,17 @@ final class StepExecution {
     );
   }
 
-  /// [given] with every measured value written into the argument that takes it.
+  /// [given] with every measured value written where the row said it goes.
   ///
   /// The measurement wins over the step's own default for that argument. The default is what makes
   /// the row examinable before the run — it is not what the row was written to run with.
+  ///
+  /// **A mapping entry is written out as a value, exactly as the row could have written it.** The
+  /// step then reads the value it was always going to read and learns nothing about where it came
+  /// from — which is what keeps a step free of any knowledge of measurements, the same way it is
+  /// free of any knowledge of the mode it runs in.
   Arguments _withMeasured(ResolvedStep resolved, Arguments given, Measurements taken) {
-    if (resolved.measured.isEmpty) {
+    if (!resolved.takesAMeasurement) {
       return given;
     }
     final Map<String, Object> values = <String, Object>{
@@ -237,6 +242,15 @@ final class StepExecution {
     for (final MeasuredArgument each in resolved.measured) {
       if (taken.valueOf(each.measurement) case final String value) {
         values[each.argument] = value;
+      }
+    }
+    for (final MeasuredSlot each in resolved.measuredSlots) {
+      if (taken.valueOf(each.measurement) case final String value) {
+        // Cast rather than checked: the resolver read this entry OUT of a mapping, so an argument
+        // that is not one here is a resolution that did not happen and belongs in the open rather
+        // than passed over.
+        final Map<String, Object?> mapping = values[each.argument]! as Map<String, Object?>;
+        values[each.argument] = <String, Object?>{...mapping, each.slot: value};
       }
     }
     return Arguments(values);
@@ -464,7 +478,7 @@ final class StepExecution {
   /// the input the gate cleared is the input this row acted on. Whatever the verdict, the row is
   /// declared — which is what makes the whole run not fully proven.
   StepStanding _measured(Step step, ResolvedStep resolved) =>
-      step.answersOnTrust || resolved.measured.isNotEmpty
+      step.answersOnTrust || resolved.takesAMeasurement
       ? StepStanding.declared
       : StepStanding.proven;
 
@@ -535,7 +549,16 @@ final class StepExecution {
       // know which mode it is in and must not have to: it measures and publishes wherever it
       // measures, and what a mode where nothing changes does with the value is decided above, by the
       // engine, which is the only place that can know the row producing it has not run.
-      measurements: taken.forStep(name, resolved.registered.publishes),
+      //
+      // The row's rename is applied HERE and nowhere else, so a step publishes the name its class
+      // declares and never learns it was published under another. What it takes off the machine is
+      // the same whichever program names it; which name the value stands under is a fact about the
+      // program, and this is where the program's facts meet the step.
+      measurements: taken.forStep(
+        name,
+        resolved.registered.publishes,
+        publishedAs: resolved.entry.publish,
+      ),
       facts: facts,
     );
   }

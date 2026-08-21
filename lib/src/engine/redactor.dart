@@ -6,6 +6,11 @@
 ///
 /// This is that place. Every port reports through the recorder, and the recorder redacts. No step
 /// can write to the record another way, so no step can forget.
+///
+/// **One instance belongs to one run, and it grows during that run.** The recording shell, the http
+/// port, the logger and the file the record is written to all hold the same object, which is what
+/// makes [register] worth anything: a credential minted in the middle of a run is hidden on every
+/// one of those surfaces from the moment it is registered.
 final class Redactor {
   /// Creates a redactor that hides [secrets].
   ///
@@ -13,11 +18,24 @@ final class Redactor {
   /// everywhere and turn the record into a page of markers, which is a worse outcome than the risk
   /// it removes — and a secret that short is a defect to fix rather than to hide.
   Redactor(Iterable<String> secrets, {this.minimumLength = 8})
-    : _secrets = secrets.where((String s) => s.length >= minimumLength).toList(growable: false)
+    : _secrets = secrets.where((String s) => s.length >= minimumLength).toList()
         ..sort((String a, String b) => b.length.compareTo(a.length));
 
-  /// A redactor that hides nothing, for a run that holds no secrets.
-  static final Redactor none = Redactor(const <String>[]);
+  /// A redactor that hides nothing and cannot be made to hide anything.
+  ///
+  /// For a context that is not a run: something which has to be handed a redactor and will never
+  /// register a value with it. [register] on this one throws.
+  ///
+  /// **A RUN NEVER USES THIS, and the throw is how a caller finds out.** What a redactor hides is
+  /// not fixed when it is built, so a run's redactor is one object that every surface of that run
+  /// holds. Handed out as a fresh instance per caller, this name would give two surfaces of one run
+  /// two separate redactors, and a credential registered through one would go on being written in
+  /// the clear by the other with nothing saying so. Handed out as one shared MUTABLE object, it
+  /// would carry a value registered by one run into the records of every later run in the same
+  /// process. It is neither: nothing can be registered with it, so it is the same object for
+  /// everybody and there is nothing in it to leak. A run builds its own with
+  /// `Redactor(const <String>[])`, which hides nothing yet and can still grow.
+  static final Redactor none = _HidesNothing();
 
   /// What replaces a secret. Fixed text rather than a variable number of stars, so that the length
   /// of the value is not readable from the record either.
@@ -32,6 +50,29 @@ final class Redactor {
 
   /// Whether anything is being hidden.
   bool get isEmpty => _secrets.isEmpty;
+
+  /// Hides [value] from here on.
+  ///
+  /// For the credential that does not exist before the run starts: one a step mints or reads while
+  /// the run happens. Nothing can be taken out of a line that is already written, so this is called
+  /// where the value is PUBLISHED and not where it is used — the run's own measurement sink, which
+  /// is the first moment the framework knows the value exists. Whatever the step wrote before that
+  /// stands.
+  ///
+  /// Kept in the same longest-first order the constructor builds, so a value registered now and a
+  /// value given at the start are replaced by the same rule.
+  ///
+  /// A value shorter than [minimumLength] is ignored, exactly as one handed to the constructor is.
+  ///
+  /// [Redactor.none] refuses instead: it belongs to no run, so nothing it was told to hide would be
+  /// hidden on any surface.
+  void register(String value) {
+    if (value.length < minimumLength || _secrets.contains(value)) {
+      return;
+    }
+    final int shorter = _secrets.indexWhere((String each) => each.length < value.length);
+    _secrets.insert(shorter < 0 ? _secrets.length : shorter, value);
+  }
 
   /// Returns [text] with every known secret replaced by [marker].
   ///
@@ -74,5 +115,21 @@ final class Redactor {
         n.endsWith('-secret') ||
         n.endsWith('-password') ||
         n.endsWith('-credential');
+  }
+}
+
+/// What [Redactor.none] is.
+final class _HidesNothing extends Redactor {
+  _HidesNothing() : super(const <String>[]);
+
+  @override
+  void register(String value) {
+    // The value is not in the message. Whatever went wrong, this is a credential, and a refusal
+    // that named it would put in the record exactly what the caller was trying to keep out of it.
+    throw StateError(
+      'this redactor belongs to no run, so a value registered with it would be hidden nowhere. A '
+      'run holds ONE redactor and every one of its surfaces holds that same object; build it with '
+      'Redactor(const <String>[]) where there is nothing to hide yet',
+    );
   }
 }

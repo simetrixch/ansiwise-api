@@ -90,14 +90,18 @@ final class ProgramResolver {
         // against the template, or the answer against the program, and a message carrying one of
         // them sends half the readers to the wrong file.
         if (spec.kind == ArgumentKind.mapping && filled.arguments.has(spec.name)) {
-          for (final MapEntry<String, String> bound in _answersBoundIn(
-            filled.arguments.raw(spec.name),
-          ).entries) {
-            if (program.answers.named(bound.value) == null) {
-              problems.add(
-                '$where: "${spec.name}" fills "${bound.key}" from the answer "${bound.value}", and '
-                'this program does not declare it',
-              );
+          final MappingEntries entries = mappingEntriesIn(filled.arguments.raw(spec.name));
+          for (final MapEntry<String, String> refused in entries.refused.entries) {
+            problems.add('$where: "${spec.name}" entry "${refused.key}" ${refused.value}');
+          }
+          for (final MapEntry<String, MappingSource> bound in entries.sources.entries) {
+            if (bound.value case FromAnswer(:final String answer)) {
+              if (program.answers.named(answer) == null) {
+                problems.add(
+                  '$where: "${spec.name}" fills "${bound.key}" from the answer "$answer", and '
+                  'this program does not declare it',
+                );
+              }
             }
           }
         }
@@ -137,7 +141,7 @@ final class ProgramResolver {
         when.add(predicate);
       }
 
-      final List<MeasuredArgument> measured = _measured(
+      final _Measured measured = _measured(
         // With the program-wide defaults already folded in, because whether the step can be built
         // while one value is missing depends on the other values it is given.
         filled,
@@ -149,7 +153,13 @@ final class ProgramResolver {
       );
 
       resolved.add(
-        ResolvedStep(entry: filled, registered: registered, when: when, measured: measured),
+        ResolvedStep(
+          entry: filled,
+          registered: registered,
+          when: when,
+          measured: measured.arguments,
+          measuredSlots: measured.slots,
+        ),
       );
     }
 
@@ -249,6 +259,7 @@ final class ProgramResolver {
       onFailure: entry.onFailure,
       arguments: entry.arguments.withDefaults(applicable),
       reads: entry.reads,
+      publish: entry.publish,
       when: entry.when,
       undo: entry.undo,
       // Every field of the row is carried, and the only thing standing between them and being
@@ -260,11 +271,15 @@ final class ProgramResolver {
     );
   }
 
-  /// Where each argument of [entry] that names a measurement takes its value from.
+  /// Where everything on [entry] that names a measurement takes its value from.
+  ///
+  /// Two places name one, and they are answered against the same table by the same rules: a whole
+  /// ARGUMENT, written `content: {measured: <name>}`, and one ENTRY of a mapping argument, written
+  /// `values: {run-id: {measured: <name>}}`.
   ///
   /// Every wiring that does not add up is refused into [problems] and left out of the result, so a
   /// program is only resolved once every one of them is bound to a row that produces it.
-  List<MeasuredArgument> _measured(
+  _Measured _measured(
     ProgramStep entry,
     RegisteredStep registered, {
     required int position,
@@ -272,9 +287,6 @@ final class ProgramResolver {
     required _Published published,
     required List<String> problems,
   }) {
-    if (entry.reads.isEmpty) {
-      return const <MeasuredArgument>[];
-    }
     final Map<String, ArgumentSpec> declared = <String, ArgumentSpec>{
       for (final ArgumentSpec spec in registered.arguments) spec.name: spec,
     };
@@ -286,7 +298,7 @@ final class ProgramResolver {
             a.key.compareTo(b.key),
       );
 
-    final List<MeasuredArgument> measured = <MeasuredArgument>[];
+    final List<MeasuredArgument> arguments = <MeasuredArgument>[];
     for (final MapEntry<String, MeasurementName> reading in readings) {
       final String argument = reading.key;
       final MeasurementName measurement = reading.value;
@@ -303,54 +315,35 @@ final class ProgramResolver {
         );
         continue;
       }
-      if (spec.secret) {
-        // The redactor is built from the values that are known before the run starts, and it is the
-        // one thing between a credential and a world-readable record. A value arriving in the middle
-        // of the run is a value it has never seen, so it would reach the record through the command
-        // the step composes and through the plan it prints.
-        problems.add(
-          '$where: $takes, and "$argument" is secret — what removes a credential from the record is '
-          'built before the run, so it could never remove one that arrives during it. A credential '
-          'belongs in a declared answer.',
-        );
+      final _Publisher? publisher = _publisherOf(
+        measurement,
+        position: position,
+        when: entry.when,
+        where: where,
+        takes: takes,
+        published: published,
+        problems: problems,
+      );
+      if (publisher == null) {
         continue;
       }
-      final List<_Publisher> publishers = published.rowsFor(measurement);
-      if (publishers.isEmpty) {
-        final Iterable<String> names = published.names;
+      // SECRECY MATCHES OR THE WIRING IS REFUSED, and it is one rule read in both directions. What
+      // makes a credential safe is that the sink registers it with the redactor the moment it is
+      // published — and only a measurement that DECLARES itself secret is registered. So an argument
+      // the step calls secret may take only such a measurement: filled from an unregistered value it
+      // would tell every reader the value is hidden while the record carries it in the clear. And an
+      // argument that is not secret may not take one either: nothing would then say the value is a
+      // credential, and a description of this program hands back what is not marked.
+      if (spec.secret != publisher.spec.secret) {
         problems.add(
-          '$where: $takes, and no step of this program publishes it — this program publishes '
-          '${names.isEmpty ? 'nothing' : names.join(', ')}',
-        );
-        continue;
-      }
-      if (publishers.length > 1) {
-        // Already reported once against the program, naming both rows. A second message here would
-        // say the same thing about the row that happens to read it.
-        continue;
-      }
-      final _Publisher publisher = publishers.first;
-      if (publisher.position >= position) {
-        problems.add(
-          '$where: $takes, and ${publisher.said} publishes it — that row runs after this one, so '
-          'the value does not exist yet when this row is built',
-        );
-        continue;
-      }
-      final List<PredicateName> ungated = <PredicateName>[
-        for (final PredicateName condition in publisher.when)
-          if (!entry.when.contains(condition)) condition,
-      ];
-      if (ungated.isNotEmpty) {
-        problems.add(
-          '$where: $takes, and ${publisher.said} publishes it only when '
-          '${ungated.join(' and ')} holds, which this row does not ask for — so the value may be '
-          'missing exactly when this row runs. Put the same condition on this row.',
+          '$where: $takes, and ${spec.secret ? '"$argument" is secret while that measurement is not' : 'that measurement is secret while "$argument" is not'} '
+          '— what hides a credential is the sink registering it where it is published, and only a '
+          'measurement declared secret is registered. Declare both or neither.',
         );
         continue;
       }
 
-      measured.add(
+      arguments.add(
         MeasuredArgument(
           argument: argument,
           measurement: measurement,
@@ -360,19 +353,153 @@ final class ProgramResolver {
       );
     }
 
-    if (measured.isNotEmpty) {
+    final List<MeasuredSlot> slots = _measuredSlots(
+      entry,
+      registered,
+      position: position,
+      where: where,
+      published: published,
+      problems: problems,
+    );
+
+    if (arguments.isNotEmpty || slots.isNotEmpty) {
       if (_whyNotBuildable(entry, registered) case final String refusal) {
         problems.add(
           '$where: takes a value from a measurement and cannot be built without it — $refusal. '
           'Everything that examines a program before it runs has to build the step, because the '
           'registry holds a factory and only an instance says whether a run can be taken back. '
-          'Read that argument as an optional one, so the step still builds while the value does '
-          'not exist yet.',
+          'Read that argument as an optional one, and read a mapping entry that names a '
+          'measurement as one holding no value yet, so the step still builds while the value does '
+          'not exist.',
         );
-        return const <MeasuredArgument>[];
+        return const _Measured(arguments: <MeasuredArgument>[], slots: <MeasuredSlot>[]);
       }
     }
-    return measured;
+    return _Measured(arguments: arguments, slots: slots);
+  }
+
+  /// Where each entry of [entry]'s mapping arguments that names a measurement takes its value from.
+  ///
+  /// The grammar of an entry is the framework's — [mappingEntriesIn] reads it — so the engine that
+  /// writes the value in knows the shape it is writing into without knowing anything about the step
+  /// that declared the mapping.
+  List<MeasuredSlot> _measuredSlots(
+    ProgramStep entry,
+    RegisteredStep registered, {
+    required int position,
+    required String where,
+    required _Published published,
+    required List<String> problems,
+  }) {
+    final List<MeasuredSlot> slots = <MeasuredSlot>[];
+    // Sorted by the argument and then by the entry, for the same reason the readings above are: the
+    // order the file wrote the keys in is not part of what a run is.
+    final List<ArgumentSpec> mappings = <ArgumentSpec>[
+      for (final ArgumentSpec spec in registered.arguments)
+        if (spec.kind == ArgumentKind.mapping && entry.arguments.has(spec.name)) spec,
+    ]..sort((ArgumentSpec a, ArgumentSpec b) => a.name.compareTo(b.name));
+
+    for (final ArgumentSpec spec in mappings) {
+      final MappingEntries entries = mappingEntriesIn(entry.arguments.raw(spec.name));
+      final List<String> named = entries.sources.keys.toList()..sort();
+      for (final String slot in named) {
+        if (entries.sources[slot] case FromMeasurement(:final MeasurementName measurement)) {
+          final String takes =
+              'fills "${spec.name}" entry "$slot" from the measurement "$measurement"';
+          final _Publisher? publisher = _publisherOf(
+            measurement,
+            position: position,
+            when: entry.when,
+            where: where,
+            takes: takes,
+            published: published,
+            problems: problems,
+          );
+          if (publisher == null) {
+            continue;
+          }
+          if (publisher.spec.secret) {
+            // A mapping entry carries no declaration of its own: nothing between the row and the
+            // step says the value is a credential. What the record keeps of it then depends on the
+            // text the step composes it into — the address of a request is recorded and its body is
+            // not — and nothing here knows which of them this entry fills. A credential goes into an
+            // argument the step declares secret, where the declaration says so to everything that
+            // reads the program.
+            problems.add(
+              '$where: $takes, and that measurement is secret — a mapping entry says nothing about '
+              'what it holds, and what the record keeps depends on the text this entry ends up in: '
+              'the address of a request is recorded and its body is not, and nothing here knows '
+              'which of them this is. Take a credential through an argument the step declares '
+              'secret, where the declaration says so to everything that reads this program.',
+            );
+            continue;
+          }
+          slots.add(
+            MeasuredSlot(
+              argument: spec.name,
+              slot: slot,
+              measurement: measurement,
+              publisher: publisher.step,
+              position: publisher.position,
+            ),
+          );
+        }
+      }
+    }
+    return slots;
+  }
+
+  /// The one row that produces [measurement] for a row at [position] gated on [when], or null when
+  /// the wiring does not add up — in which case the refusal has been added to [problems].
+  ///
+  /// ONE TABLE, ONE SET OF RULES. Whether a value exists when a row is built is a question about the
+  /// whole program, and it is the same question whether the value fills an argument or one entry of
+  /// a mapping. [takes] is how the caller says which of the two, so the refusal reads as the row
+  /// wrote it.
+  _Publisher? _publisherOf(
+    MeasurementName measurement, {
+    required int position,
+    required List<PredicateName> when,
+    required String where,
+    required String takes,
+    required _Published published,
+    required List<String> problems,
+  }) {
+    final List<_Publisher> publishers = published.rowsFor(measurement);
+    if (publishers.isEmpty) {
+      final Iterable<String> names = published.names;
+      problems.add(
+        '$where: $takes, and no step of this program publishes it — this program publishes '
+        '${names.isEmpty ? 'nothing' : names.join(', ')}',
+      );
+      return null;
+    }
+    if (publishers.length > 1) {
+      // Already reported once against the program, naming both rows. A second message here would
+      // say the same thing about the row that happens to read it.
+      return null;
+    }
+    final _Publisher publisher = publishers.first;
+    if (publisher.position >= position) {
+      problems.add(
+        '$where: $takes, and ${publisher.said} publishes it — that row runs after this one, so '
+        'the value does not exist yet when this row is built',
+      );
+      return null;
+    }
+    final List<PredicateName> ungated = <PredicateName>[
+      for (final PredicateName condition in publisher.when)
+        if (!when.contains(condition)) condition,
+    ];
+    if (ungated.isNotEmpty) {
+      problems.add(
+        '$where: $takes, and ${publisher.said} publishes it only when '
+        '${ungated.join(' and ')} holds, which this row does not ask for — so the value may be '
+        'missing exactly when this row runs. Put the same condition on this row.',
+      );
+      return null;
+    }
+    return publisher;
   }
 
   /// Why [entry] cannot be built without the values it measures, or null when it can.
@@ -400,11 +527,19 @@ final class ProgramResolver {
   }
 }
 
-/// Which row of a program publishes which measurement.
+/// The table this whole mechanism is: which row of a program publishes which name, and what that
+/// name stands for.
+///
+/// Keyed by the EFFECTIVE name — the one a row publishes under, which is the name the step declares
+/// unless the row renamed it. Every question asked of a measurement is asked of this one table: does
+/// anything produce this name, where does that row stand, what is it gated on, and is what it
+/// produces a credential. A row that reads a value and a row that renames one are the same table
+/// seen from two sides.
 final class _Published {
   const _Published(this._rows);
 
-  /// Reads [program] against [registry], refusing a name two rows publish into [problems].
+  /// Reads [program] against [registry], refusing into [problems] a name two rows publish and a
+  /// rename of a name its step does not publish.
   factory _Published.of(Program program, Registry registry, List<String> problems) {
     final Map<MeasurementName, List<_Publisher>> rows = <MeasurementName, List<_Publisher>>{};
     for (int i = 0; i < program.steps.length; i++) {
@@ -415,10 +550,22 @@ final class _Published {
         // misspelled step name look like two problems.
         continue;
       }
+      for (final MeasurementName renamed in entry.publish.keys) {
+        if (!registered.publishes.any((MeasurementSpec spec) => spec.name == renamed)) {
+          final Iterable<String> declared = registered.publishes.map(
+            (MeasurementSpec spec) => spec.name.value,
+          );
+          problems.add(
+            '${program.name}[$i] ${entry.step}: publishes "$renamed" under '
+            '"${entry.publish[renamed]}", and this step publishes '
+            '${declared.isEmpty ? 'nothing' : declared.join(', ')}',
+          );
+        }
+      }
       for (final MeasurementSpec spec in registered.publishes) {
         rows
-            .putIfAbsent(spec.name, () => <_Publisher>[])
-            .add(_Publisher(position: i, step: entry.step, when: entry.when));
+            .putIfAbsent(entry.publish[spec.name] ?? spec.name, () => <_Publisher>[])
+            .add(_Publisher(position: i, step: entry.step, when: entry.when, spec: spec));
       }
     }
 
@@ -448,7 +595,12 @@ final class _Published {
 
 /// One row that publishes a measurement.
 final class _Publisher {
-  const _Publisher({required this.position, required this.step, required this.when});
+  const _Publisher({
+    required this.position,
+    required this.step,
+    required this.when,
+    required this.spec,
+  });
 
   /// Where it stands in the program, counted from zero.
   final int position;
@@ -459,26 +611,24 @@ final class _Publisher {
   /// The conditions that decide whether it runs at all.
   final List<PredicateName> when;
 
+  /// What the step declared about the value, which is where secrecy is read from.
+  ///
+  /// The NAME in here is the one the step publishes, not the one this row publishes it under. The
+  /// two differ wherever a row renamed it, and everything except secrecy is read from the table's
+  /// key rather than from this.
+  final MeasurementSpec spec;
+
   /// How a refusal names it, counting from one because a person reading a file counts that way.
   String get said => 'step ${position + 1} $step';
 }
 
-/// Which answer each entry of a mapping argument is filled from, by the name the entry stands under.
-///
-/// The one shape a mapping entry may take to name an answer is `{answer: <name>}`, optionally with a
-/// `join` beside it where the answer holds several values. Every other entry is data the step reads
-/// itself and says nothing about answers, so it is passed over rather than guessed at.
-///
-/// Read out of the RAW argument because that is what a mapping is at this point: the loader has
-/// checked its shape — names on the left, one level of scalars under them — and nothing has turned
-/// it into a step's own type yet, which is the whole reason a check can stand here at all.
-Map<String, String> _answersBoundIn(Object? mapping) {
-  if (mapping is! Map<String, Object?>) {
-    return const <String, String>{};
-  }
-  return <String, String>{
-    for (final MapEntry<String, Object?> each in mapping.entries)
-      if (each.value case final Map<String, Object?> body)
-        if (body['answer'] case final String answer) each.key: answer,
-  };
+/// Everything on one row that takes its value from a measurement.
+final class _Measured {
+  const _Measured({required this.arguments, required this.slots});
+
+  /// The whole arguments the row takes from a measurement.
+  final List<MeasuredArgument> arguments;
+
+  /// The entries of the row's mapping arguments it takes from a measurement.
+  final List<MeasuredSlot> slots;
 }
