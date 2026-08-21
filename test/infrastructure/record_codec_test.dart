@@ -146,7 +146,7 @@ void main() {
       expect(back.created, isTrue);
     });
 
-    test('request-sent', () {
+    test('request-sent, with and without a socket path', () {
       final RequestSent back = reread<RequestSent>(
         RequestSent(
           sequence: 9,
@@ -160,6 +160,24 @@ void main() {
       expect(back.method, 'PUT');
       expect(back.url, 'https://secrets.example.com/v1/secret');
       expect(back.status, 204);
+      expect(back.socketPath, isNull, reason: 'this one went over the network');
+
+      final RequestSent overSocket = reread<RequestSent>(
+        RequestSent(
+          sequence: 10,
+          at: at,
+          step: step,
+          method: 'GET',
+          url: 'http://on-a-socket.invalid/health',
+          status: 200,
+          socketPath: '/run/daemon.sock',
+        ),
+      );
+      expect(
+        overSocket.socketPath,
+        '/run/daemon.sock',
+        reason: 'the record must say the request went over a socket, not just to a url',
+      );
     });
 
     test('a log line, at every level', () {

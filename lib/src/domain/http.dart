@@ -23,6 +23,7 @@ final class HttpRequest {
     this.headers = const <String, String>{},
     this.body,
     this.timeout,
+    this.socketPath,
     bool? observes,
   }) : observes = observes ?? (method == 'GET' || method == 'HEAD' || method == 'OPTIONS');
 
@@ -30,6 +31,9 @@ final class HttpRequest {
   final String method;
 
   /// Where the request goes.
+  ///
+  /// Parsed regardless of [socketPath]: the path and the `Host` header a server sees come from
+  /// here even when the connection itself does not go over the network.
   final String url;
 
   /// The headers to send. A credential in here is redacted before the request reaches the record.
@@ -40,6 +44,13 @@ final class HttpRequest {
 
   /// How long to wait before giving up.
   final Duration? timeout;
+
+  /// The filesystem path of a unix domain socket to connect to instead of the network, or null to
+  /// resolve [url] and connect over the network exactly as before.
+  ///
+  /// Nothing else about the request changes: [url] still parses and still supplies the request path
+  /// and the `Host` header, and this only moves where the bytes go.
+  final String? socketPath;
 
   /// Whether this request only reads.
   ///

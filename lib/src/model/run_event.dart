@@ -253,6 +253,7 @@ final class RequestSent extends RunEvent {
     required this.method,
     required this.url,
     required this.status,
+    this.socketPath,
   });
 
   /// The request method.
@@ -263,6 +264,10 @@ final class RequestSent extends RunEvent {
 
   /// The status that came back.
   final int status;
+
+  /// The unix domain socket the request went over instead of the network, or null when it went
+  /// over the network exactly as [url] says.
+  final String? socketPath;
 
   @override
   String get kind => 'request-sent';

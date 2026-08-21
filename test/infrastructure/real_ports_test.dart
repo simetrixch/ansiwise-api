@@ -233,6 +233,54 @@ void main() {
         throwsA(isA<TimeoutException>()),
       );
     });
+
+    // Unix domain sockets are not available on Windows for this transport, so this is the one test
+    // in this suite that cannot run everywhere the rest of it does — it is skipped rather than
+    // failed, the same way `test/checks/*_test.dart`'s POSIX-permission checks skip off a platform
+    // that has no POSIX permission bits.
+    test(
+      'sends the request over a unix domain socket when one is given, and no TCP listener answers',
+      () async {
+        final String socketPath = p.join(temp.path, 'ansiwise.sock');
+        final HttpServer socketServer = await HttpServer.bind(
+          InternetAddress(socketPath, type: InternetAddressType.unix),
+          0,
+        );
+        String? seenPath;
+        String? seenHost;
+        socketServer.listen((io.HttpRequest request) async {
+          seenPath = request.uri.path;
+          seenHost = request.headers.value('host');
+          request.response.write('{"ok":true}');
+          await request.response.close();
+        }, onError: (Object _) {});
+
+        try {
+          // The host and port name a TCP listener nothing in this test process ever binds. If the
+          // socket path were ignored and the request went out over the network instead, this would
+          // fail fast with a refused connection rather than reach the unix socket server above — it
+          // would not silently pass.
+          final HttpAnswer answer = await const RealHttp().send(
+            HttpRequest('GET', 'http://127.0.0.1:1/things', socketPath: socketPath),
+          );
+
+          expect(answer.status, 200);
+          expect(answer.body, '{"ok":true}');
+          expect(seenPath, '/things', reason: 'the url still supplies the request path');
+          expect(seenHost, '127.0.0.1:1', reason: 'the url still supplies the Host header');
+        } finally {
+          await socketServer.close(force: true);
+        }
+      },
+      // Skipped rather than run off Linux, and the reason is the SOCKET FILE and not the transport:
+      // this test binds a listener at a path, and where the platform has no such thing to bind there
+      // is nothing for the request to reach. Whether the client would dial one is a question only a
+      // platform that can answer it should be asked.
+      skip: Platform.isLinux
+          ? null
+          : 'this test binds a unix socket file, which needs a platform '
+                'that has one',
+    );
   });
 
   group('RealClock', () {

@@ -168,6 +168,7 @@ final class RecordCodec implements RecordJson {
         method: _text(json, 'method'),
         url: _text(json, 'url'),
         status: _number(json, 'status'),
+        socketPath: _optionalText(json, 'socket_path'),
       ),
       'planned' => Planned(
         sequence: sequence,
@@ -360,7 +361,12 @@ final class RecordCodec implements RecordJson {
       'bytes': e.bytes,
       'created': e.created,
     },
-    final RequestSent e => <String, Object?>{'method': e.method, 'url': e.url, 'status': e.status},
+    final RequestSent e => <String, Object?>{
+      'method': e.method,
+      'url': e.url,
+      'status': e.status,
+      if (e.socketPath case final String socketPath) 'socket_path': socketPath,
+    },
     final Planned e => <String, Object?>{'plan': stepPlan(e.plan)},
     final Log e => <String, Object?>{'level': e.level.name, 'message': e.message},
     final StepFinished e => <String, Object?>{

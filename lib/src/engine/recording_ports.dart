@@ -247,7 +247,14 @@ final class RecordingHttp implements Http {
         step: step,
         method: request.method,
         url: redactor.hide(request.url),
+        // Through the redactor like the address beside it. A socket path is rarely a secret, but a
+        // field that goes into the record raw is a field nobody thought about — and an answer given
+        // as a path is a place an answer can stand.
         status: answer.status,
+        socketPath: switch (request.socketPath) {
+          final String path => redactor.hide(path),
+          null => null,
+        },
       ),
     );
     return answer;

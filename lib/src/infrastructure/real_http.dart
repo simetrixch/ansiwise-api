@@ -24,6 +24,14 @@ final class RealHttp implements Http {
     if (timeout != null) {
       client.connectionTimeout = timeout;
     }
+    // The URL is still parsed below and still supplies the request path and the Host header; only
+    // where the connection goes changes. The port number passed to startConnect is meaningless for
+    // a unix socket and is not what selects it — the address's type is.
+    final String? socketPath = request.socketPath;
+    if (socketPath != null) {
+      client.connectionFactory = (Uri url, String? proxyHost, int? proxyPort) =>
+          Socket.startConnect(InternetAddress(socketPath, type: InternetAddressType.unix), 0);
+    }
 
     final Stopwatch watch = Stopwatch()..start();
     try {
