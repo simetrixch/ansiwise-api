@@ -313,6 +313,72 @@ void main() {
     });
   });
 
+  group('a mapping is a mapping, and not the text it prints as', () {
+    /// A step taking a mapping, so two runs can differ only in where one entry ends.
+    Registry filling() => registryOf(
+      steps: <String, (String, Step Function(Arguments))>{
+        'fills': ('x:1', FillsSlotsFromAMapping.fromArguments),
+      },
+      arguments: <String, List<ArgumentSpec>>{'fills': FillsSlotsFromAMapping.arguments},
+    );
+
+    String forMapping(Map<String, Object?> values) => fingerprintOf(
+      program: ProgramResolver(filling()).resolve(
+        Program(
+          name: const ProgramName('p'),
+          roles: <Role>[const Role('master')],
+          steps: <ProgramStep>[
+            ProgramStep(
+              step: const StepName('fills'),
+              onFailure: OnFailure.exit,
+              arguments: Arguments(<String, Object>{
+                'path': '/one',
+                'template': 'a=<a> b=<b>',
+                'values': values,
+              }),
+            ),
+          ],
+        ),
+      ),
+      commit: 'abc',
+      answers: Arguments.none,
+    );
+
+    test('two entries and one entry holding the separator are different inputs', () {
+      // Written through toString both are the text `{a: x, b: y}`: a text with two slots filled, and
+      // a text with ONE slot whose value happens to contain a comma and a colon. Two different files
+      // get written, one hash, and the second is admitted on the first's dry run. This is the list
+      // case above one level up, and a mapping needs its own boundary for the same reason.
+      expect(
+        forMapping(const <String, Object?>{'a': 'x', 'b': 'y'}),
+        isNot(forMapping(const <String, Object?>{'a': 'x, b: y'})),
+      );
+    });
+
+    test('one empty entry and no entry at all are different inputs', () {
+      expect(
+        forMapping(const <String, Object?>{'a': ''}),
+        isNot(forMapping(const <String, Object?>{})),
+      );
+    });
+
+    test('the same mapping twice is one input', () {
+      expect(
+        forMapping(const <String, Object?>{'a': 'x', 'b': 'y'}),
+        forMapping(const <String, Object?>{'a': 'x', 'b': 'y'}),
+      );
+    });
+
+    test('the order the entries were written in is not part of the input', () {
+      // A mapping is named slots, and a step reads them by name. A file listing them the other way
+      // round is the same run, exactly as an answer file listing its answers in another order is.
+      expect(
+        forMapping(const <String, Object?>{'a': 'x', 'b': 'y'}),
+        forMapping(const <String, Object?>{'b': 'y', 'a': 'x'}),
+      );
+    });
+  });
+
   group('what stays out of it', () {
     test('the commit is in, because the same program at another commit is other steps', () {
       expect(fingerprintFor(commit: 'abc'), isNot(fingerprintFor(commit: 'def')));

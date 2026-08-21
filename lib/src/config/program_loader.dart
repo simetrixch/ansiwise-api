@@ -495,6 +495,7 @@ const Set<String> _stepKeys = <String>{
   'undo',
   'rests_on_an_earlier_step',
   'keep_output',
+  'publish',
 };
 
 /// One thing wrong with a file, and where in it.
@@ -706,6 +707,7 @@ ProgramStep? _step(YamlNode node, int index, _Refusals refusals) {
   final bool undo = _undo(node, label, refusals);
   final bool restsOn = _flag(node, 'rests_on_an_earlier_step', label, refusals);
   final bool keepsOutput = _flag(node, 'keep_output', label, refusals);
+  final Map<MeasurementName, MeasurementName> publish = _publish(node, label, refusals);
   final _Given given = _given(node, label, refusals);
 
   if (step == null || onFailure == null) {
@@ -716,11 +718,58 @@ ProgramStep? _step(YamlNode node, int index, _Refusals refusals) {
     onFailure: onFailure,
     arguments: given.arguments,
     reads: given.reads,
+    publish: publish,
     when: when,
     undo: undo,
     restsOnAnEarlierStep: restsOn,
     keepsOutput: keepsOutput,
   );
+}
+
+/// The name this row publishes each of its step's measurements under, by the name the step declares.
+///
+/// `publish: {http_field: run_id}` and nothing else — one name for one name, so a row that runs the
+/// same step twice can say which value stands under which name. Whether the step declares the name
+/// on the left is not asked here: this loader has never seen a registry, and the resolver refuses it
+/// there naming the step and everything it does publish.
+Map<MeasurementName, MeasurementName> _publish(YamlMap entry, String label, _Refusals refusals) {
+  final YamlNode? node = entry.nodes['publish'];
+  if (node == null) {
+    return const <MeasurementName, MeasurementName>{};
+  }
+  if (node is! YamlMap) {
+    refusals.add(
+      node.span.start.line,
+      '$label: "publish" maps a name the step declares to the name this row publishes it under, '
+      'and the file gives ${_kindOf(node)}',
+    );
+    return const <MeasurementName, MeasurementName>{};
+  }
+
+  final Map<MeasurementName, MeasurementName> renamed = <MeasurementName, MeasurementName>{};
+  for (final MapEntry<Object?, YamlNode> pair in node.nodes.entries) {
+    final int line = _lineOf(pair.key) ?? pair.value.span.start.line;
+    final Object? declared = (pair.key as YamlNode?)?.value;
+    final Object? under = pair.value.value;
+    if (declared is! String || !MeasurementName.isValid(declared)) {
+      refusals.add(
+        line,
+        '$label: "publish" is keyed by a measurement name the step declares, and the file gives '
+        '"$declared" — lower case letters, digits and underscores, in parts separated by dots',
+      );
+      continue;
+    }
+    if (under is! String || !MeasurementName.isValid(under)) {
+      refusals.add(
+        line,
+        '$label: "publish" writes "$declared" under "$under", and that is not a measurement name — '
+        'lower case letters, digits and underscores, in parts separated by dots',
+      );
+      continue;
+    }
+    renamed[MeasurementName(declared)] = MeasurementName(under);
+  }
+  return renamed;
 }
 
 /// A boolean an entry may write, false unless the file says otherwise.

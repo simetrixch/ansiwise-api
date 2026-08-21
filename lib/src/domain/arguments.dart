@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 
+import '../model/names.dart';
 import 'derivation.dart';
 
 /// What kind of value an argument holds.
@@ -26,7 +27,125 @@ enum ArgumentKind {
   /// nothing that evaluates — no expression, no condition, no reference to another key. The step
   /// that declares one says in its own words which slots it reads and refuses anything else, the
   /// way it refuses an argument it does not declare.
+  ///
+  /// What one entry may say is [MappingSource] and it belongs to the framework, not to the step.
   mapping,
+}
+
+/// Where one entry of a mapping argument takes its value from.
+///
+/// **TWO WORDS ARE THE FRAMEWORK'S; THE REST OF A BODY IS THE STEP'S.** `answer:` takes the value
+/// from an answer this run holds and `measured:` from a measurement an earlier row published. Those
+/// two are declared here because the framework FILLS them — the engine writes a measured value into
+/// a mapping entry, and a body the engine writes into is a body the engine has to be able to read.
+///
+/// **Everything else in a body is passed over, not refused.** A step that declares a mapping
+/// argument may read properties of its own beside the source — `join`, `split`, `file`, `key` are
+/// shipped examples — and a body naming NEITHER of the two words is a source the step resolves for
+/// itself, which the engine has no business judging. Reading those would put a step's private
+/// vocabulary inside the engine, which is the thing this file exists to prevent.
+///
+/// What IS refused is a body naming BOTH: two sources for one value, and nothing to say which.
+///
+/// **It is a named slot and not a language.** One name for one value, nothing nested under it,
+/// nothing that evaluates.
+@immutable
+sealed class MappingSource {
+  const MappingSource();
+}
+
+/// An entry filled from an answer this run holds.
+@immutable
+final class FromAnswer extends MappingSource {
+  /// Binds an entry to the answer called [answer].
+  const FromAnswer(this.answer);
+
+  /// The name of the answer, as the program declares it.
+  final String answer;
+}
+
+/// An entry filled from a measurement an earlier row of this program published.
+@immutable
+final class FromMeasurement extends MappingSource {
+  /// Binds an entry to [measurement].
+  const FromMeasurement(this.measurement);
+
+  /// The name the value stands under.
+  final MeasurementName measurement;
+}
+
+/// What the entries of one mapping argument say, read against the grammar [MappingSource] states.
+@immutable
+final class MappingEntries {
+  /// Holds what was read out of one mapping.
+  const MappingEntries({required this.sources, required this.refused});
+
+  /// Nothing was written, so nothing is bound and nothing is wrong.
+  static const MappingEntries nothing = MappingEntries(
+    sources: <String, MappingSource>{},
+    refused: <String, String>{},
+  );
+
+  /// Where each entry that names a source takes its value from, by the name the entry stands under.
+  ///
+  /// An entry whose value is written out in the file is not in here: it names no source.
+  final Map<String, MappingSource> sources;
+
+  /// What is wrong with each entry the framework could not read, by the name the entry stands under.
+  ///
+  /// Reported rather than passed over. An entry the framework cannot read is one nothing fills, and
+  /// a run that passed over it would hand the step a slot that stays in the text as its own literal
+  /// characters — which whatever reads the text next takes as content.
+  ///
+  /// The sentence says what is wrong and not where: only the caller knows the row and the argument
+  /// the entry stands on, and a reader told the wrong thing about `{measured: Bad.Name}` goes
+  /// looking in the wrong file.
+  final Map<String, String> refused;
+}
+
+/// What each entry of [mapping] takes its value from, and what is wrong with the ones that name no
+/// source and are not a value either.
+///
+/// A value that is not a mapping at all reads as nothing: whether this argument may hold a mapping
+/// is the argument check's question, and answering it twice would put the same rule in two places.
+MappingEntries mappingEntriesIn(Object? mapping) {
+  if (mapping is! Map<String, Object?>) {
+    return MappingEntries.nothing;
+  }
+  final Map<String, MappingSource> sources = <String, MappingSource>{};
+  final Map<String, String> refused = <String, String>{};
+  for (final MapEntry<String, Object?> each in mapping.entries) {
+    final Object? body = each.value;
+    if (body is! Map<String, Object?>) {
+      // The value written out by the row. It names no source, and there is nothing here to check.
+      continue;
+    }
+    final Object? fromAnswer = body['answer'];
+    final Object? fromMeasurement = body['measured'];
+    if (fromAnswer != null && fromMeasurement != null) {
+      refused[each.key] =
+          'names an answer and a measurement at once, and nothing says which of them the value '
+          'comes from — a body carries one source or the other';
+      continue;
+    }
+    if (fromAnswer case final String answer) {
+      sources[each.key] = FromAnswer(answer);
+      continue;
+    }
+    if (fromMeasurement case final String measured) {
+      if (!MeasurementName.isValid(measured)) {
+        refused[each.key] =
+            'takes the measurement "$measured", and that is not a measurement name — lower case '
+            'letters, digits and underscores, in parts separated by dots';
+        continue;
+      }
+      sources[each.key] = FromMeasurement(MeasurementName(measured));
+      continue;
+    }
+    // A body naming neither word. Where the value comes from is the step's own business, and it is
+    // passed over exactly as a written-out scalar is.
+  }
+  return MappingEntries(sources: sources, refused: refused);
 }
 
 /// The condition that determines whether an answer must be provided.
