@@ -178,3 +178,39 @@ abstract base class IrreversibleStep extends Step {
   /// using cannot, because what is lost is state nothing wrote down.
   String get irreversibleReason;
 }
+
+/// A step whose ONLY effect is the answer it gets back.
+///
+/// **What it is for, measured rather than argued.** [Step.check] runs again after [Step.apply] and
+/// has to answer [Satisfied] before a step counts as done — which is what turns "the step returned
+/// without throwing" into "the step worked", and it is the strongest rule this framework has. There
+/// is one shape it cannot express: a call that MINTS. What comes back is the whole of what happened,
+/// so there is nothing on the other end for a second look to find, and asking again would not be a
+/// second look but a SECOND EXCHANGE. Written as an ordinary [IrreversibleStep], such a row does its
+/// work and is then failed for a postcondition that cannot exist.
+///
+/// **What the three members mean here**, each different from every other kind:
+///
+/// - [Step.check] answers about the ROW — whether what it has to send is there — and is NEVER the
+///   proof. It answers [Ready] or [Blocked] and never [Satisfied]: a satisfied exchange is a check
+///   claiming to have found work already done, and this kind exists to say that nothing can.
+/// - [Step.apply] sends the one changing request, reads the named field of ITS OWN answer, and
+///   publishes it. What it publishes is the evidence, and it is the only evidence there is.
+/// - **The ENGINE supplies the postcondition, not the step.** Where the run branch asks a step's
+///   check a second time, an exchange has the run's measurements asked instead whether every name
+///   THIS ROW published now holds a value. All held is success; any missing is a failure that names
+///   it.
+///
+/// **The row is stamped declared and never proven, in every mode.** Nothing re-read the other end,
+/// because a second look is a second exchange — so the framework watched the row work and did not
+/// verify what the work left behind. Declared is the honest word for that and it must not be
+/// softened: a proven exchange row would be the record putting the weight of a measurement behind
+/// the row's own answer.
+///
+/// **A kind with nothing to publish has no postcondition at all**, because a postcondition over an
+/// empty set holds vacuously. It is refused where the registry is audited, and refused again by the
+/// engine for any row that reaches a run.
+abstract base class ExchangeStep extends IrreversibleStep {
+  /// Creates a step whose answer is its whole effect.
+  const ExchangeStep();
+}

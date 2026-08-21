@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 
 import '../model/names.dart';
 import 'arguments.dart';
+import 'measurement.dart';
 import 'program.dart';
 import 'registry.dart';
 
@@ -153,6 +154,16 @@ final class ResolvedStep {
 
   /// Everything on this row that is measured, arguments and mapping entries together.
   List<MeasuredValue> get measuredValues => <MeasuredValue>[...measured, ...measuredSlots];
+
+  /// The names this row publishes under: what its step declares, with this row's renames applied.
+  ///
+  /// The EFFECTIVE names, which is what every other reader of the published table already uses. A
+  /// postcondition read against the names the step declares would look for `http_field` on a row
+  /// that publishes it as `run_id`, and would report a value missing that is there under the name
+  /// the file gave it.
+  List<MeasurementName> get publishesAs => <MeasurementName>[
+    for (final MeasurementSpec spec in registered.publishes) entry.publish[spec.name] ?? spec.name,
+  ];
 
   /// Where [argument] takes its value from, or null when the row wrote it or left it to a default.
   MeasuredArgument? measurementFor(String argument) {

@@ -514,6 +514,117 @@ final class SendsACredential extends IrreversibleStep {
   }
 }
 
+/// A step whose one request mints a value, and whose answer is the whole of what it did.
+///
+/// The shape mechanism 4 exists for: nothing on the other end holds anything a second look could
+/// find, so its check answers about the ROW and the engine reads what the row published instead.
+final class MintsByExchange extends ExchangeStep {
+  /// Sends to [url] and publishes what came back under [publishes].
+  const MintsByExchange({required this.url, required this.publishes});
+
+  /// Where the one changing request goes.
+  final String url;
+
+  /// The name it publishes what came back under.
+  final MeasurementName publishes;
+
+  @override
+  String get irreversibleReason =>
+      'the other end minted a value and there is no request that unmints it';
+
+  @override
+  Future<CheckResult> check(StepContext context) async => url.isEmpty
+      ? const CheckResult.blocked('this row holds no address')
+      : const CheckResult.ready();
+
+  @override
+  Future<StepPlan> plan(StepContext context) async =>
+      StepPlan.nothing('would ask $url for a value');
+
+  @override
+  Future<void> apply(StepContext context) async {
+    final HttpAnswer answer = await context.http.send(HttpRequest('POST', url));
+    context.measurements.publish(publishes, answer.body);
+  }
+}
+
+/// An exchange that sends its request and publishes nothing.
+///
+/// The row the engine's postcondition exists to fail: it did something to the other end, and there
+/// is now nothing anywhere that says what.
+final class ExchangesAndPublishesNothing extends ExchangeStep {
+  /// Sends to [url] and publishes nothing at all.
+  const ExchangesAndPublishesNothing({required this.url});
+
+  /// Where the one changing request goes.
+  final String url;
+
+  @override
+  String get irreversibleReason => 'the other end was told and nothing here can untell it';
+
+  @override
+  Future<CheckResult> check(StepContext context) async => const CheckResult.ready();
+
+  @override
+  Future<StepPlan> plan(StepContext context) async => StepPlan.nothing('would ask $url');
+
+  @override
+  Future<void> apply(StepContext context) async {
+    await context.http.send(HttpRequest('POST', url));
+  }
+}
+
+/// An ORDINARY irreversible step that publishes and whose postcondition never holds afterwards.
+///
+/// The innocent neighbour of the exchange kind. Every name it publishes holds a value when it is
+/// done, so a framework that handed the engine's postcondition to anything but an exchange would
+/// report this row as a success — and the rule that turns "the step returned" into "the step worked"
+/// would have been quietly widened for every step in every plugin.
+final class PublishesAndStillFailsItsCheck extends IrreversibleStep {
+  /// Publishes under [publishes] and never satisfies its own check.
+  const PublishesAndStillFailsItsCheck({required this.publishes});
+
+  /// The name it publishes under.
+  final MeasurementName publishes;
+
+  @override
+  String get irreversibleReason => 'the other end was told and nothing here can untell it';
+
+  @override
+  Future<CheckResult> check(StepContext context) async => const CheckResult.ready();
+
+  @override
+  Future<StepPlan> plan(StepContext context) async => const StepPlan.nothing('would tell');
+
+  @override
+  Future<void> apply(StepContext context) async =>
+      context.measurements.publish(publishes, 'a value that proves nothing about the machine');
+}
+
+/// An exchange whose check claims the work already stands.
+///
+/// A claim its kind says nobody can make: what an exchange does is its answer, and the other end
+/// holds nothing that could say it was done before.
+final class ExchangeThatClaimsSatisfied extends ExchangeStep {
+  /// Creates the step that claims it.
+  const ExchangeThatClaimsSatisfied();
+
+  /// What its check says it found, which the refusal quotes back.
+  static const String claimed = 'the value was already minted';
+
+  @override
+  String get irreversibleReason => 'the other end minted a value and nothing unmints it';
+
+  @override
+  Future<CheckResult> check(StepContext context) async => const CheckResult.satisfied(claimed);
+
+  @override
+  Future<StepPlan> plan(StepContext context) async => const StepPlan.nothing('would ask');
+
+  @override
+  Future<void> apply(StepContext context) async {}
+}
+
 /// A step that writes a text whose slots are filled from a mapping argument.
 ///
 /// The mapping is the framework's grammar and not this step's: every entry is either a value

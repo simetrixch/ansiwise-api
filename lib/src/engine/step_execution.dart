@@ -135,13 +135,25 @@ final class StepExecution {
     }
 
     final Step step = resolved.registered.create(arguments);
-    final StepContext context = _contextFor(name, mode, arguments, facts, answers, taken, resolved);
+    // Built here rather than inside the context, because the run branch of an exchange asks it what
+    // THIS row published — a question the run-wide collection cannot answer, since a name an earlier
+    // row filled is still in it.
+    final StepMeasurements sink = taken.forStep(
+      name,
+      resolved.registered.publishes,
+      publishedAs: resolved.entry.publish,
+    );
+    final StepContext context = _contextFor(name, mode, arguments, facts, answers, sink, resolved);
+    if (step is ExchangeStep) {
+      _sayWhatIsNotProven(name, _exchangeSaid(resolved));
+    }
 
     try {
       return await _perform(
         resolved: resolved,
         step: step,
         context: context,
+        sink: sink,
         mode: mode,
         start: start,
         firstEvent: firstEvent,
@@ -197,6 +209,18 @@ final class StepExecution {
       '${<String>[for (final MeasuredValue each in resolved.measuredValues) '${each.fills} holds the measurement "${each.measurement}", taken by '
             '${each.producedBy} during this run'].join('; ')} — a value measured while the run happens was not in the fingerprint the gate '
       'spoke on, so this row is declared rather than proven';
+
+  /// What the record says about an exchange row, in every mode and whatever the verdict.
+  String _exchangeSaid(ResolvedStep resolved) =>
+      'this row is an exchange: what it publishes — ${resolved.publishesAs.join(', ')} — is the '
+      'whole of what the request did, and nothing re-read the other end because a second look '
+      'would be a second exchange. The row is declared rather than proven.';
+
+  /// What an exchange row says when it published nothing under a name it owes.
+  String _publishedNothingSaid(List<MeasurementName> missing) =>
+      'the request was sent and this row published nothing under '
+      '${missing.map((MeasurementName name) => '"$name"').join(', ')} — an exchange proves itself '
+      'by the value it brings back, and there is none';
 
   /// What a row says when the measurement it takes was never published.
   String _missingSaid(List<MeasuredValue> missing) => <String>[
@@ -288,6 +312,7 @@ final class StepExecution {
     required ResolvedStep resolved,
     required Step step,
     required StepContext context,
+    required StepMeasurements sink,
     required Mode mode,
     required DateTime start,
     required int firstEvent,
@@ -343,6 +368,23 @@ final class StepExecution {
         );
 
       case Satisfied(:final String because):
+        if (step is ExchangeStep) {
+          // AN EXCHANGE HAS NOTHING A CHECK COULD FIND ALREADY DONE. Its answer is its whole effect,
+          // so a check that answers satisfied is claiming a proof the kind exists to say cannot be
+          // taken — and the row would then be recorded as success having sent nothing and published
+          // nothing. It is refused in every mode, because the claim is false in every mode.
+          return _finish(
+            resolved: resolved,
+            verdict: _verdictFor(
+              resolved.entry.onFailure,
+              'an exchange answered that its work already stands, and nothing on the other end can '
+              'say that: what it publishes is the whole of what the request does. It said: $because',
+            ),
+            standing: _measured(step, resolved),
+            start: start,
+            firstEvent: firstEvent,
+          );
+        }
         if (mode == Mode.dry) {
           _recordPlan(resolved.entry.step, StepPlan.nothing(because));
         }
@@ -363,6 +405,7 @@ final class StepExecution {
           resolved: resolved,
           step: step,
           context: context,
+          sink: sink,
           mode: mode,
           start: start,
           firstEvent: firstEvent,
@@ -374,6 +417,7 @@ final class StepExecution {
     required ResolvedStep resolved,
     required Step step,
     required StepContext context,
+    required StepMeasurements sink,
     required Mode mode,
     required DateTime start,
     required int firstEvent,
@@ -433,6 +477,18 @@ final class StepExecution {
           );
         }
 
+        if (step is ExchangeStep) {
+          return _exchangeFinished(
+            resolved: resolved,
+            step: step,
+            context: context,
+            sink: sink,
+            start: start,
+            firstEvent: firstEvent,
+            captured: captured,
+          );
+        }
+
         final CheckResult after = await step.check(context);
         if (after is! Satisfied) {
           final String why = switch (after) {
@@ -464,6 +520,73 @@ final class StepExecution {
     }
   }
 
+  /// Closes an exchange row on the postcondition the ENGINE supplies.
+  ///
+  /// **The step's own check is not asked again, and that is the whole of this kind.** What an
+  /// exchange did is the value it brought back; the other end holds nothing a second look could
+  /// find, and asking it again would be a second exchange rather than a second look. So what is
+  /// measured here is the run's own record of what this row published.
+  ///
+  /// **Against what THIS ROW published, never against the run.** [Measurements] is run-wide and
+  /// cumulative — a name an earlier row filled still holds its value — so a postcondition read off
+  /// it would pass a row that published nothing at all, on the strength of somebody else's value.
+  /// [StepMeasurements.publishedByThisRow] is what this row put in, and nothing else is consulted.
+  ///
+  /// **A row with nothing to publish fails**, because a postcondition over an empty set holds
+  /// vacuously: the row would be recorded as success having proven nothing whatever. The registry
+  /// audit refuses such a kind before it is ever registered; this is the same refusal for a row that
+  /// reached a run anyway.
+  StepOutcome _exchangeFinished({
+    required ResolvedStep resolved,
+    required ExchangeStep step,
+    required StepContext context,
+    required StepMeasurements sink,
+    required DateTime start,
+    required int firstEvent,
+    required Object? captured,
+  }) {
+    final List<MeasurementName> owed = resolved.publishesAs;
+    if (owed.isEmpty) {
+      return _finish(
+        resolved: resolved,
+        verdict: _verdictFor(
+          resolved.entry.onFailure,
+          'this row is an exchange and its step publishes nothing, so there is no postcondition to '
+          'hold — the request was sent and nothing here can say what it did',
+        ),
+        standing: _measured(step, resolved),
+        start: start,
+        firstEvent: firstEvent,
+        applied: _applied(resolved, step, context, captured),
+      );
+    }
+    final List<MeasurementName> missing = <MeasurementName>[
+      for (final MeasurementName name in owed)
+        if (!sink.publishedByThisRow.contains(name)) name,
+    ];
+    if (missing.isNotEmpty) {
+      return _finish(
+        resolved: resolved,
+        verdict: _verdictFor(resolved.entry.onFailure, _publishedNothingSaid(missing)),
+        standing: _measured(step, resolved),
+        start: start,
+        firstEvent: firstEvent,
+        applied: _applied(resolved, step, context, captured),
+      );
+    }
+    context.log.info(
+      'the exchange answered, and every name this row publishes holds a value: ${owed.join(', ')}',
+    );
+    return _finish(
+      resolved: resolved,
+      verdict: const Succeeded(),
+      standing: _measured(step, resolved),
+      start: start,
+      firstEvent: firstEvent,
+      applied: _applied(resolved, step, context, captured),
+    );
+  }
+
   /// What a branch that measured through [step] may claim.
   ///
   /// A step that answers on trust cannot yield a proven row, whichever way its check, its plan or
@@ -477,8 +600,12 @@ final class StepExecution {
   /// before the first step runs. The framework did watch this row work; what it cannot say is that
   /// the input the gate cleared is the input this row acted on. Whatever the verdict, the row is
   /// declared — which is what makes the whole run not fully proven.
+  /// An [ExchangeStep] cannot yield a proven row either, and it is the only one of the three whose
+  /// answer never changes with the mode or the branch: nothing re-read the other end, because a
+  /// second look would be a second exchange. The framework watched the row work and cannot say what
+  /// the work left behind, so declared is what every branch of an exchange stamps.
   StepStanding _measured(Step step, ResolvedStep resolved) =>
-      step.answersOnTrust || resolved.takesAMeasurement
+      step is ExchangeStep || step.answersOnTrust || resolved.takesAMeasurement
       ? StepStanding.declared
       : StepStanding.proven;
 
@@ -505,7 +632,7 @@ final class StepExecution {
     Arguments arguments,
     Facts facts,
     Arguments answers,
-    Measurements taken,
+    StepMeasurements sink,
     ResolvedStep resolved,
   ) {
     final RecordingLogger log = RecordingLogger(
@@ -550,15 +677,11 @@ final class StepExecution {
       // measures, and what a mode where nothing changes does with the value is decided above, by the
       // engine, which is the only place that can know the row producing it has not run.
       //
-      // The row's rename is applied HERE and nowhere else, so a step publishes the name its class
-      // declares and never learns it was published under another. What it takes off the machine is
-      // the same whichever program names it; which name the value stands under is a fact about the
-      // program, and this is where the program's facts meet the step.
-      measurements: taken.forStep(
-        name,
-        resolved.registered.publishes,
-        publishedAs: resolved.entry.publish,
-      ),
+      // The row's rename is applied by that sink and nowhere else, so a step publishes the name its
+      // class declares and never learns it was published under another. What it takes off the
+      // machine is the same whichever program names it; which name the value stands under is a fact
+      // about the program, and the sink is where the program's facts meet the step.
+      measurements: sink,
       facts: facts,
     );
   }

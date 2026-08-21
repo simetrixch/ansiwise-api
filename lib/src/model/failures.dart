@@ -178,6 +178,21 @@ final class RequestRefused extends EngineFailure {
   final String body;
 }
 
+/// An answer arrived and did not carry what the row named.
+///
+/// Not [RequestRefused]: the other end did its part and answered. What is missing is the VALUE this
+/// row exists to take out of that answer — so the row publishes nothing, and whatever was meant to
+/// read it later has nothing to read.
+///
+/// **The body is not carried here, and that is the point.** A row may be reading a credential out
+/// of an answer, and a failure that quoted the body would put that credential into the record —
+/// nothing hides a value that was never published. Where the body may ride along, the caller throws
+/// [RequestRefused] instead and says so.
+final class AnswerIncomplete extends EngineFailure {
+  /// Records that an answer did not carry what was named, as [message] says.
+  const AnswerIncomplete(super.message);
+}
+
 /// A machine role does not match the program.
 final class RoleMismatch extends EngineFailure {
   /// Records that [program] does not apply to a machine of [role].

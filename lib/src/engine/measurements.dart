@@ -36,11 +36,11 @@ final class Measurements {
   /// publishes the name its class declares, always and in every program; the sink writes the name
   /// this row chose. A step told which name it was running under would be a step that could act on
   /// it, and which name a value stands under is a fact about a program rather than about a machine.
-  MeasurementSink forStep(
+  StepMeasurements forStep(
     StepName step,
     List<MeasurementSpec> declares, {
     Map<MeasurementName, MeasurementName> publishedAs = const <MeasurementName, MeasurementName>{},
-  }) => _StepMeasurements(this, step, declares, publishedAs);
+  }) => StepMeasurements(this, step, declares, publishedAs);
 
   /// What was published under [name], or null when nothing has been.
   String? valueOf(MeasurementName name) => _values[name];
@@ -54,13 +54,26 @@ final class Measurements {
 /// A second publication of the same name by the same step overwrites the first. A step measures in
 /// its check, and its check runs again after its apply — so the same name arriving twice is one step
 /// looking twice, and the later reading is the one that describes the machine the next row acts on.
-final class _StepMeasurements implements MeasurementSink {
-  const _StepMeasurements(this._into, this._step, this._declares, this._publishedAs);
+///
+/// **It also remembers what went through IT**, which is what [publishedByThisRow] answers and what
+/// [Measurements] cannot. The collection above is run-wide and cumulative, so asking it whether a
+/// name holds a value answers yes for a value an EARLIER row published — and a postcondition read
+/// off that would pass a row that published nothing at all.
+final class StepMeasurements implements MeasurementSink {
+  /// Creates the sink one step publishes through, which [Measurements.forStep] is what builds.
+  StepMeasurements(this._into, this._step, this._declares, this._publishedAs);
 
   final Measurements _into;
   final StepName _step;
   final List<MeasurementSpec> _declares;
   final Map<MeasurementName, MeasurementName> _publishedAs;
+  final Set<MeasurementName> _published = <MeasurementName>{};
+
+  /// The names this one step really published, under the names the row publishes them by.
+  ///
+  /// Empty until the step publishes something, whatever any earlier row of the same run put into the
+  /// collection behind it.
+  Set<MeasurementName> get publishedByThisRow => Set<MeasurementName>.unmodifiable(_published);
 
   @override
   void publish(MeasurementName name, String value) {
@@ -96,7 +109,9 @@ final class _StepMeasurements implements MeasurementSink {
       // the framework knows the value exists.
       _into._redactor.register(value);
     }
-    _into._values[_publishedAs[name] ?? name] = value;
+    final MeasurementName published = _publishedAs[name] ?? name;
+    _into._values[published] = value;
+    _published.add(published);
   }
 
   /// The spec that declares [name], or null when the step's registry entry does not.
