@@ -49,3 +49,10 @@ shared-gate: test/checks/shared_gate_test.dart
 package-gate: test/checks/package_gate_test.dart
 # The version guard, driven with scripted versions.
 version-guard: test/checks/version_guard_test.dart
+# A version and a channel compose the one tag that starts a release, held against the filter
+# .github/workflows/release.yml triggers on — READ from that file rather than restated in Dart — and
+# pushed only when a person typed both. The two things no glob can state are stated in Dart and
+# checked here: a number carries no leading zero, and alpha is less ripe than stable, which is what
+# decides whether the release page marks a pre-release. This package is compiled into nothing, so a
+# tag typed straight into git is the whole of what somebody else would then resolve, held to nothing.
+release: test/checks/release_test.dart
