@@ -331,7 +331,12 @@ final class Arguments {
   List<String> textList(String name) => _read<List<String>>(name);
 
   /// The text value of [name], or null when it was not given.
-  String? optionalText(String name) => _values[name] as String?;
+  ///
+  /// Absent and present-as-another-kind are different mistakes, and only the first is what an
+  /// optional argument is for: nothing given is a null and the step builds. A value of another kind
+  /// is a row that named its argument wrong, and it is refused in [_read]'s words — a cast here
+  /// would report the operator's misspelling as a type failure inside the step.
+  String? optionalText(String name) => _values[name] == null ? null : _read<String>(name);
 
   T _read<T>(String name) {
     final Object? value = _values[name];
